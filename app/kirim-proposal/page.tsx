@@ -474,9 +474,9 @@ Hormat kami,
 ${formData.namaPengirim}
 ${formData.jabatanPengirim}
 HIMTIKA UNSIKA
-📞 089652540065
-✉️ 2410631170123@student.unsika.ac.id
-🌐 https://himtika.cs.unsika.ac.id/`
+Telepon: 089652540065
+Email: 2410631170123@student.unsika.ac.id
+Website: https://himtika.cs.unsika.ac.id/`
     }
 
     const handleWhatsappSend = (company: Company) => {
@@ -651,7 +651,7 @@ Apakah Anda yakin ingin mengimpor data ini? Data yang ada sekarang akan ditimpa.
                         // Import companies
                         if (hasValidCompanies) {
                             // Validasi setiap company
-                            const validCompanies = importedData.companies.filter((company: any) => {
+                            const validCompanies = importedData.companies.filter((company: Company) => {
                                 return company.id &&
                                     company.namaPerusahaan &&
                                     company.dateAdded &&
