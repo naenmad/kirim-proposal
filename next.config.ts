@@ -15,12 +15,3 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
-
-{
-  "compilerOptions": {
-    "baseUrl": ".",
-      "paths": {
-      "@/*": ["./app/*"]
-    }
-  }
-}
