@@ -1,11 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-
-interface FormData {
-    namaPengirim: string
-    jabatanPengirim: string
-}
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/utils/supabase/client'
 
 interface Company {
     id: string
@@ -17,12 +14,26 @@ interface Company {
         whatsapp: {
             sent: boolean
             dateSent?: string
+            sentBy?: string
+            sentByName?: string
+            sentByPhone?: string
         }
         email: {
             sent: boolean
             dateSent?: string
+            sentBy?: string
+            sentByName?: string
+            sentByPhone?: string
         }
     }
+}
+
+interface UserProfile {
+    id: string
+    full_name: string
+    email: string
+    phone_number: string
+    jabatan: string
 }
 
 interface NotificationProps {
@@ -33,7 +44,6 @@ interface NotificationProps {
     onClose: () => void
 }
 
-// PERBAIKAN: Ubah interface ConfirmDialogProps
 interface ConfirmDialogProps {
     isVisible: boolean
     title: string
@@ -42,7 +52,7 @@ interface ConfirmDialogProps {
     onCancel: () => void
     confirmText?: string
     cancelText?: string
-    type?: 'danger' | 'warning' | 'info' // Tetap sama
+    type?: 'danger' | 'warning' | 'info'
 }
 
 // Custom Notification Component
@@ -51,7 +61,7 @@ const CustomNotification = ({ type, title, message, isVisible, onClose }: Notifi
         if (isVisible) {
             const timer = setTimeout(() => {
                 onClose()
-            }, 5000) // Auto close after 5 seconds
+            }, 5000)
             return () => clearTimeout(timer)
         }
     }, [isVisible, onClose])
@@ -211,11 +221,6 @@ const CustomConfirmDialog = ({ isVisible, title, message, onConfirm, onCancel, c
 }
 
 export default function KirimProposalPage() {
-    const [formData, setFormData] = useState<FormData>({
-        namaPengirim: '',
-        jabatanPengirim: ''
-    })
-
     const [companies, setCompanies] = useState<Company[]>([])
     const [showAddForm, setShowAddForm] = useState(false)
     const [newCompany, setNewCompany] = useState({
@@ -224,11 +229,16 @@ export default function KirimProposalPage() {
         nomorWhatsapp: ''
     })
     const [isLoaded, setIsLoaded] = useState(false)
+    const [isLoading, setIsLoading] = useState(false)
+    const [user, setUser] = useState<any>(null)
+    const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
 
-    // PERBAIKAN: Custom notification states dengan tipe yang benar
+    const router = useRouter()
+    const supabase = createClient()
+
     const [notification, setNotification] = useState<{
         isVisible: boolean
-        type: 'success' | 'error' | 'warning' | 'info'  // Explicit union type
+        type: 'success' | 'error' | 'warning' | 'info'
         title: string
         message: string
     }>({
@@ -238,13 +248,12 @@ export default function KirimProposalPage() {
         message: ''
     })
 
-    // PERBAIKAN: Update confirm dialog state dengan type yang benar
     const [confirmDialog, setConfirmDialog] = useState<{
         isVisible: boolean
         title: string
         message: string
         onConfirm: () => void
-        type: 'danger' | 'warning' | 'info'  // Explicit union type
+        type: 'danger' | 'warning' | 'info'
     }>({
         isVisible: false,
         title: '',
@@ -253,7 +262,106 @@ export default function KirimProposalPage() {
         type: 'warning'
     })
 
-    // Custom notification functions
+    // Check authentication and load user data
+    useEffect(() => {
+        checkAuth()
+    }, [])
+
+    const checkAuth = async () => {
+        try {
+            setIsLoading(true)
+
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+            if (sessionError) {
+                console.error('Session error:', sessionError)
+                router.push('/auth/login')
+                return
+            }
+
+            if (!session) {
+                router.push('/auth/login')
+                return
+            }
+
+            setUser(session.user)
+
+            // Load user profile
+            const { data: profileData, error: profileError } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', session.user.id)
+                .single()
+
+            if (profileError) {
+                console.error('Profile error:', profileError)
+                showNotification('error', 'Error Profile', 'Gagal memuat data profile. Silakan logout dan login kembali.')
+                return
+            }
+
+            if (!profileData) {
+                showNotification('error', 'Profile Tidak Ditemukan', 'Profile tidak ditemukan. Silakan hubungi administrator.')
+                return
+            }
+
+            setUserProfile(profileData)
+            await loadCompanies()
+
+        } catch (error) {
+            console.error('Auth error:', error)
+            showNotification('error', 'Error Autentikasi', 'Terjadi kesalahan saat memverifikasi akun.')
+            router.push('/auth/login')
+        } finally {
+            setIsLoading(false)
+            setIsLoaded(true)
+        }
+    }
+
+    const loadCompanies = async () => {
+        try {
+            const { data: companiesData, error: companiesError } = await supabase
+                .from('companies')
+                .select('*')
+                .order('created_at', { ascending: false })
+
+            if (companiesError) {
+                console.error('Companies error:', companiesError)
+                throw companiesError
+            }
+
+            // Transform Supabase data to component format
+            const transformedCompanies: Company[] = (companiesData || []).map(company => ({
+                id: company.id,
+                namaPerusahaan: company.nama_perusahaan,
+                emailPerusahaan: company.email_perusahaan,
+                nomorWhatsapp: company.nomor_whatsapp,
+                dateAdded: company.date_added,
+                status: {
+                    whatsapp: {
+                        sent: company.whatsapp_sent,
+                        dateSent: company.whatsapp_date_sent,
+                        sentBy: company.whatsapp_sent_by,
+                        sentByName: company.whatsapp_sent_by_name,
+                        sentByPhone: company.whatsapp_sent_by_phone
+                    },
+                    email: {
+                        sent: company.email_sent,
+                        dateSent: company.email_date_sent,
+                        sentBy: company.email_sent_by,
+                        sentByName: company.email_sent_by_name,
+                        sentByPhone: company.email_sent_by_phone
+                    }
+                }
+            }))
+
+            setCompanies(transformedCompanies)
+
+        } catch (error) {
+            console.error('Error loading companies:', error)
+            showNotification('error', 'Error Loading Data', 'Gagal memuat data perusahaan dari database.')
+        }
+    }
+
     const showNotification = (type: 'success' | 'error' | 'warning' | 'info', title: string, message: string) => {
         setNotification({
             isVisible: true,
@@ -267,7 +375,6 @@ export default function KirimProposalPage() {
         setNotification(prev => ({ ...prev, isVisible: false }))
     }
 
-    // PERBAIKAN: Update showConfirm function
     const showConfirm = (title: string, message: string, onConfirm: () => void, type: 'danger' | 'warning' | 'info' = 'warning') => {
         setConfirmDialog({
             isVisible: true,
@@ -285,73 +392,12 @@ export default function KirimProposalPage() {
         setConfirmDialog(prev => ({ ...prev, isVisible: false }))
     }
 
-    // Load data from localStorage on component mount
-    useEffect(() => {
-        try {
-            const savedFormData = localStorage.getItem('himtika-proposal-sender')
-            const savedCompanies = localStorage.getItem('himtika-proposal-companies')
-
-            console.log('Loading data from localStorage...')
-            console.log('Saved form data:', savedFormData)
-            console.log('Saved companies:', savedCompanies)
-
-            if (savedFormData) {
-                const parsedFormData = JSON.parse(savedFormData)
-                setFormData(parsedFormData)
-                console.log('Form data loaded:', parsedFormData)
-            }
-
-            if (savedCompanies) {
-                const parsedCompanies = JSON.parse(savedCompanies)
-                setCompanies(parsedCompanies)
-                console.log('Companies loaded:', parsedCompanies)
-            }
-        } catch (error) {
-            console.error('Error loading data from localStorage:', error)
-            showNotification('error', 'Error Loading Data', 'Gagal memuat data dari penyimpanan lokal')
-        } finally {
-            setIsLoaded(true)
-        }
-    }, [])
-
-    // Save form data to localStorage whenever it changes
-    useEffect(() => {
-        if (isLoaded) {
-            try {
-                localStorage.setItem('himtika-proposal-sender', JSON.stringify(formData))
-                console.log('Form data saved to localStorage:', formData)
-            } catch (error) {
-                console.error('Error saving form data to localStorage:', error)
-                showNotification('error', 'Error Saving Data', 'Gagal menyimpan data pengirim')
-            }
-        }
-    }, [formData, isLoaded])
-
-    // Save companies to localStorage whenever it changes
-    useEffect(() => {
-        if (isLoaded) {
-            try {
-                localStorage.setItem('himtika-proposal-companies', JSON.stringify(companies))
-                console.log('Companies saved to localStorage:', companies)
-            } catch (error) {
-                console.error('Error saving companies to localStorage:', error)
-                showNotification('error', 'Error Saving Data', 'Gagal menyimpan data perusahaan')
-            }
-        }
-    }, [companies, isLoaded])
-
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, value } = e.target
-        setFormData(prev => ({ ...prev, [name]: value }))
-    }
-
     const handleNewCompanyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target
         setNewCompany(prev => ({ ...prev, [name]: value }))
     }
 
-    const addCompany = () => {
-        // Validasi: nama perusahaan wajib dan minimal salah satu kontak
+    const addCompany = async () => {
         if (!newCompany.namaPerusahaan.trim()) {
             showNotification('error', 'Data Tidak Lengkap', 'Nama perusahaan harus diisi!')
             return
@@ -362,20 +408,48 @@ export default function KirimProposalPage() {
             return
         }
 
-        const company: Company = {
-            id: Date.now().toString(),
-            ...newCompany,
-            dateAdded: new Date().toISOString(),
-            status: {
-                whatsapp: { sent: false },
-                email: { sent: false }
-            }
-        }
+        try {
+            setIsLoading(true)
 
-        setCompanies(prev => [...prev, company])
-        setNewCompany({ namaPerusahaan: '', emailPerusahaan: '', nomorWhatsapp: '' })
-        setShowAddForm(false)
-        showNotification('success', 'Perusahaan Ditambahkan', `${company.namaPerusahaan} berhasil ditambahkan ke daftar`)
+            const newCompanyData = {
+                nama_perusahaan: newCompany.namaPerusahaan,
+                email_perusahaan: newCompany.emailPerusahaan,
+                nomor_whatsapp: newCompany.nomorWhatsapp,
+                date_added: new Date().toISOString(),
+                whatsapp_sent: false,
+                email_sent: false,
+                whatsapp_date_sent: null,
+                email_date_sent: null,
+                whatsapp_sent_by: null,
+                whatsapp_sent_by_name: null,
+                whatsapp_sent_by_phone: null,
+                email_sent_by: null,
+                email_sent_by_name: null,
+                email_sent_by_phone: null,
+                created_by: user?.id,
+                created_by_name: userProfile?.full_name // <-- TAMBAHKAN INI
+            }
+
+            const { data, error } = await supabase
+                .from('companies')
+                .insert([newCompanyData])
+                .select()
+                .single()
+
+            if (error) throw error
+
+            await loadCompanies()
+            setNewCompany({ namaPerusahaan: '', emailPerusahaan: '', nomorWhatsapp: '' })
+            setShowAddForm(false)
+
+            showNotification('success', 'Perusahaan Ditambahkan', `${newCompany.namaPerusahaan} berhasil ditambahkan ke database`)
+
+        } catch (error) {
+            console.error('Error adding company:', error)
+            showNotification('error', 'Error Database', 'Gagal menambahkan perusahaan ke database. Silakan coba lagi.')
+        } finally {
+            setIsLoading(false)
+        }
     }
 
     const removeCompany = (id: string) => {
@@ -383,31 +457,68 @@ export default function KirimProposalPage() {
         if (company) {
             showConfirm(
                 'Hapus Perusahaan',
-                `Yakin ingin menghapus "${company.namaPerusahaan}" dari daftar?\n\nData ini tidak dapat dikembalikan.`,
-                () => {
-                    setCompanies(prev => prev.filter(c => c.id !== id))
-                    showNotification('success', 'Perusahaan Dihapus', `${company.namaPerusahaan} berhasil dihapus dari daftar`)
+                `Yakin ingin menghapus "${company.namaPerusahaan}"?\n\nData ini tidak dapat dikembalikan.`,
+                async () => {
+                    try {
+                        setIsLoading(true)
+
+                        const { error } = await supabase
+                            .from('companies')
+                            .delete()
+                            .eq('id', id)
+
+                        if (error) throw error
+
+                        await loadCompanies()
+                        showNotification('success', 'Perusahaan Dihapus', `${company.namaPerusahaan} berhasil dihapus dari database`)
+
+                    } catch (error) {
+                        console.error('Error deleting company:', error)
+                        showNotification('error', 'Error Database', 'Gagal menghapus perusahaan dari database.')
+                    } finally {
+                        setIsLoading(false)
+                    }
                 },
                 'danger'
             )
         }
     }
 
-    const markAsSent = (companyId: string, type: 'whatsapp' | 'email') => {
-        setCompanies(prev => prev.map(company =>
-            company.id === companyId
+    const markAsSent = async (companyId: string, type: 'whatsapp' | 'email') => {
+        if (!userProfile) return
+
+        try {
+            const updateData = type === 'whatsapp'
                 ? {
-                    ...company,
-                    status: {
-                        ...company.status,
-                        [type]: {
-                            sent: true,
-                            dateSent: new Date().toISOString()
-                        }
-                    }
+                    whatsapp_sent: true,
+                    whatsapp_date_sent: new Date().toISOString(),
+                    whatsapp_sent_by: user.id,
+                    whatsapp_sent_by_name: userProfile.full_name,
+                    whatsapp_sent_by_phone: userProfile.phone_number,
+                    updated_at: new Date().toISOString()
                 }
-                : company
-        ))
+                : {
+                    email_sent: true,
+                    email_date_sent: new Date().toISOString(),
+                    email_sent_by: user.id,
+                    email_sent_by_name: userProfile.full_name,
+                    email_sent_by_phone: userProfile.phone_number,
+                    updated_at: new Date().toISOString()
+                }
+
+            const { error } = await supabase
+                .from('companies')
+                .update(updateData)
+                .eq('id', companyId)
+
+            if (error) throw error
+
+            await loadCompanies()
+
+        } catch (error) {
+            console.error('Error updating status:', error)
+            showNotification('warning', 'Warning', 'Status tidak tersimpan di database, tetapi pesan tetap terkirim.')
+        }
     }
 
     const resetStatus = (companyId: string, type: 'whatsapp' | 'email') => {
@@ -416,22 +527,40 @@ export default function KirimProposalPage() {
             showConfirm(
                 'Reset Status',
                 `Reset status ${type === 'whatsapp' ? 'WhatsApp' : 'Email'} untuk "${company.namaPerusahaan}"?\n\nAnda dapat mengirim proposal lagi setelah reset.`,
-                () => {
-                    setCompanies(prev => prev.map(comp =>
-                        comp.id === companyId
+                async () => {
+                    try {
+                        const updateData = type === 'whatsapp'
                             ? {
-                                ...comp,
-                                status: {
-                                    ...comp.status,
-                                    [type]: {
-                                        sent: false,
-                                        dateSent: undefined
-                                    }
-                                }
+                                whatsapp_sent: false,
+                                whatsapp_date_sent: null,
+                                whatsapp_sent_by: null,
+                                whatsapp_sent_by_name: null,
+                                whatsapp_sent_by_phone: null,
+                                updated_at: new Date().toISOString()
                             }
-                            : comp
-                    ))
-                    showNotification('info', 'Status Direset', `Status ${type === 'whatsapp' ? 'WhatsApp' : 'Email'} berhasil direset`)
+                            : {
+                                email_sent: false,
+                                email_date_sent: null,
+                                email_sent_by: null,
+                                email_sent_by_name: null,
+                                email_sent_by_phone: null,
+                                updated_at: new Date().toISOString()
+                            }
+
+                        const { error } = await supabase
+                            .from('companies')
+                            .update(updateData)
+                            .eq('id', companyId)
+
+                        if (error) throw error
+
+                        await loadCompanies()
+                        showNotification('info', 'Status Direset', `Status ${type === 'whatsapp' ? 'WhatsApp' : 'Email'} berhasil direset`)
+
+                    } catch (error) {
+                        console.error('Error resetting status:', error)
+                        showNotification('error', 'Error Database', 'Gagal mereset status di database.')
+                    }
                 }
             )
         }
@@ -451,7 +580,22 @@ export default function KirimProposalPage() {
         return cleanNumber
     }
 
+    const formatPhoneNumber = (phoneNumber: string): string => {
+        if (!phoneNumber) return ''
+
+        // Format untuk tampilan
+        if (phoneNumber.startsWith('62')) {
+            const number = phoneNumber.substring(2)
+            if (number.length >= 9) {
+                return `+62 ${number.substring(0, 3)}-${number.substring(3, 7)}-${number.substring(7)}`
+            }
+        }
+        return phoneNumber
+    }
+
     const generateMessage = (companyName: string) => {
+        if (!userProfile) return ''
+
         return `Kepada Yth.
 Tim Public Relations / Kemitraan
 ${companyName}
@@ -471,17 +615,17 @@ Besar harapan kami untuk dapat menjalin komunikasi lebih lanjut dan berkolaboras
 Atas perhatian dan waktunya, kami ucapkan terima kasih.
 
 Hormat kami,
-${formData.namaPengirim}
-${formData.jabatanPengirim}
+${userProfile.full_name}
+${userProfile.jabatan}
 HIMTIKA UNSIKA
-Telepon: 089652540065
-Email: 2410631170123@student.unsika.ac.id
+Telepon: ${formatPhoneNumber(userProfile.phone_number)}
+Email: ${userProfile.email}
 Website: https://himtika.cs.unsika.ac.id/`
     }
 
     const handleWhatsappSend = (company: Company) => {
-        if (!formData.namaPengirim.trim() || !formData.jabatanPengirim.trim()) {
-            showNotification('warning', 'Data Pengirim Diperlukan', 'Data pengirim harus diisi terlebih dahulu!')
+        if (!userProfile) {
+            showNotification('error', 'Profile Error', 'Data profile tidak ditemukan!')
             return
         }
 
@@ -505,8 +649,8 @@ Website: https://himtika.cs.unsika.ac.id/`
     }
 
     const handleEmailSend = (company: Company) => {
-        if (!formData.namaPengirim.trim() || !formData.jabatanPengirim.trim()) {
-            showNotification('warning', 'Data Pengirim Diperlukan', 'Data pengirim harus diisi terlebih dahulu!')
+        if (!userProfile) {
+            showNotification('error', 'Profile Error', 'Data profile tidak ditemukan!')
             return
         }
 
@@ -529,8 +673,20 @@ Website: https://himtika.cs.unsika.ac.id/`
         }
     }
 
-    const isFormValid = () => {
-        return formData.namaPengirim.trim() !== '' && formData.jabatanPengirim.trim() !== ''
+    const handleLogout = async () => {
+        showConfirm(
+            'Logout',
+            'Yakin ingin keluar dari akun?',
+            async () => {
+                try {
+                    await supabase.auth.signOut()
+                    router.push('/auth/login')
+                } catch (error) {
+                    console.error('Logout error:', error)
+                    showNotification('error', 'Error Logout', 'Gagal logout. Silakan coba lagi.')
+                }
+            }
+        )
     }
 
     const getStatusColor = (sent: boolean) => {
@@ -552,132 +708,30 @@ Website: https://himtika.cs.unsika.ac.id/`
         const sentWhatsapp = companies.filter(c => c.status.whatsapp.sent).length
         const sentEmail = companies.filter(c => c.status.email.sent).length
         const bothSent = companies.filter(c => c.status.whatsapp.sent && c.status.email.sent).length
+        const mySent = companies.filter(c =>
+            (c.status.whatsapp.sent && c.status.whatsapp.sentBy === user?.id) ||
+            (c.status.email.sent && c.status.email.sentBy === user?.id)
+        ).length
 
-        return { total, sentWhatsapp, sentEmail, bothSent }
+        return { total, sentWhatsapp, sentEmail, bothSent, mySent }
     }
 
     const stats = getStats()
 
     // Show loading state until data is loaded
-    if (!isLoaded) {
+    if (!isLoaded || isLoading) {
         return (
             <div className="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen py-8 px-4 sm:px-6 lg:px-8">
                 <div className="max-w-6xl mx-auto">
                     <div className="text-center py-20">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                        <p className="mt-4 text-gray-600">Memuat data...</p>
+                        <p className="mt-4 text-gray-600">
+                            {!isLoaded ? 'Memuat data...' : 'Menyimpan data...'}
+                        </p>
                     </div>
                 </div>
             </div>
         )
-    }
-
-    const exportData = () => {
-        try {
-            const dataToExport = {
-                formData,
-                companies,
-                exportDate: new Date().toISOString(),
-                version: '1.0'
-            }
-
-            const dataStr = JSON.stringify(dataToExport, null, 2)
-            const dataBlob = new Blob([dataStr], { type: 'application/json' })
-            const url = URL.createObjectURL(dataBlob)
-
-            const link = document.createElement('a')
-            link.href = url
-            link.download = `himtika-proposal-backup-${new Date().toISOString().split('T')[0]}.json`
-            document.body.appendChild(link)
-            link.click()
-            document.body.removeChild(link)
-            URL.revokeObjectURL(url)
-
-            showNotification('success', 'Data Berhasil Diekspor', `Backup data tersimpan dengan nama:\n${link.download}`)
-        } catch (error) {
-            console.error('Error exporting data:', error)
-            showNotification('error', 'Gagal Export Data', 'Terjadi kesalahan saat mengekspor data')
-        }
-    }
-
-    const importData = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0]
-        if (!file) return
-
-        // Reset input value untuk bisa import file yang sama
-        event.target.value = ''
-
-        const reader = new FileReader()
-        reader.onload = (e) => {
-            try {
-                const importedData = JSON.parse(e.target?.result as string)
-
-                // Validasi struktur data
-                if (!importedData || typeof importedData !== 'object') {
-                    throw new Error('Format file tidak valid')
-                }
-
-                // Validasi field yang diperlukan
-                const hasValidFormData = importedData.formData &&
-                    typeof importedData.formData === 'object'
-
-                const hasValidCompanies = Array.isArray(importedData.companies)
-
-                if (!hasValidFormData && !hasValidCompanies) {
-                    throw new Error('File tidak mengandung data yang valid')
-                }
-
-                // Konfirmasi import
-                const confirmMessage = `Data yang akan diimpor:
-• Data Pengirim: ${hasValidFormData ? 'Ada' : 'Tidak ada'}
-• Perusahaan: ${hasValidCompanies ? importedData.companies.length + ' perusahaan' : 'Tidak ada'}
-• Tanggal Export: ${importedData.exportDate ? new Date(importedData.exportDate).toLocaleString('id-ID') : 'Tidak diketahui'}
-
-Apakah Anda yakin ingin mengimpor data ini? Data yang ada sekarang akan ditimpa.`
-
-                // PERBAIKAN: Pastikan menggunakan tipe yang benar
-                showConfirm(
-                    'Konfirmasi Import Data',
-                    confirmMessage,
-                    () => {
-                        // Import form data
-                        if (hasValidFormData) {
-                            setFormData({
-                                namaPengirim: importedData.formData.namaPengirim || '',
-                                jabatanPengirim: importedData.formData.jabatanPengirim || ''
-                            })
-                        }
-
-                        // Import companies
-                        if (hasValidCompanies) {
-                            // Validasi setiap company
-                            const validCompanies = importedData.companies.filter((company: Company) => {
-                                return company.id &&
-                                    company.namaPerusahaan &&
-                                    company.dateAdded &&
-                                    company.status
-                            })
-                            setCompanies(validCompanies)
-                        }
-
-                        // Close add form if open
-                        setShowAddForm(false)
-
-                        showNotification('success', 'Data Berhasil Diimpor', `• ${hasValidFormData ? 'Data pengirim diperbarui' : 'Data pengirim tidak berubah'}\n• ${hasValidCompanies ? `${importedData.companies.length} perusahaan diimpor` : 'Tidak ada perusahaan yang diimpor'}`)
-                    },
-                    'info' // Menggunakan tipe yang valid
-                )
-            } catch (error) {
-                console.error('Error importing data:', error)
-                showNotification('error', 'Gagal Import Data', `${error instanceof Error ? error.message : 'File tidak valid atau rusak'}\n\nPastikan:\n• File adalah hasil export dari aplikasi ini\n• File tidak rusak atau dimodifikasi\n• Format JSON valid`)
-            }
-        }
-
-        reader.onerror = () => {
-            showNotification('error', 'Error Membaca File', 'Gagal membaca file yang dipilih')
-        }
-
-        reader.readAsText(file)
     }
 
     return (
@@ -703,19 +757,46 @@ Apakah Anda yakin ingin mengimpor data ini? Data yang ada sekarang akan ditimpa.
 
             <div className="max-w-6xl mx-auto">
 
-                {/* Header */}
-                <div className="text-center mb-8">
-                    <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4">
-                        Kirim Proposal Sponsorship
-                    </h1>
-                    <p className="text-xl text-gray-600 mb-2">HIMTIKA UNSIKA</p>
-                    <p className="text-gray-500 max-w-2xl mx-auto leading-relaxed">
-                        Sistem manajemen pengiriman proposal sponsorship dengan tracking status per perusahaan
-                    </p>
+                {/* Header with User Info */}
+                <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">
+                                Kirim Proposal Sponsorship
+                            </h1>
+                            <p className="text-lg text-gray-600 mb-1">HIMTIKA UNSIKA</p>
+                            {userProfile && (
+                                <div className="text-sm text-gray-500">
+                                    <p>👤 {userProfile.full_name} • {userProfile.jabatan}</p>
+                                    <p>📧 {userProfile.email} • 📱 {formatPhoneNumber(userProfile.phone_number)}</p>
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => router.push('/history')}
+                                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all flex items-center gap-2"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                History
+                            </button>
+                            <button
+                                onClick={handleLogout}
+                                className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-all flex items-center gap-2"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                                </svg>
+                                Logout
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Stats */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
                     <div className="bg-white rounded-lg p-4 text-center shadow-sm">
                         <div className="text-2xl font-bold text-blue-600">{stats.total}</div>
                         <div className="text-sm text-gray-600">Total Perusahaan</div>
@@ -732,76 +813,10 @@ Apakah Anda yakin ingin mengimpor data ini? Data yang ada sekarang akan ditimpa.
                         <div className="text-2xl font-bold text-purple-600">{stats.bothSent}</div>
                         <div className="text-sm text-gray-600">Keduanya Terkirim</div>
                     </div>
-                </div>
-
-                {/* Sender Info Form */}
-                <div className="bg-white rounded-xl shadow-lg p-6 sm:p-8 mb-8">
-                    <h2 className="text-2xl font-semibold text-gray-900 mb-6">Data Pengirim</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label htmlFor="namaPengirim" className="block text-sm font-medium text-gray-700 mb-2">
-                                Nama Pengirim *
-                            </label>
-                            <input
-                                type="text"
-                                id="namaPengirim"
-                                name="namaPengirim"
-                                value={formData.namaPengirim}
-                                onChange={handleInputChange}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 placeholder-gray-500"
-                                placeholder="Masukkan nama pengirim"
-                                required
-                            />
-                        </div>
-                        <div>
-                            <label htmlFor="jabatanPengirim" className="block text-sm font-medium text-gray-700 mb-2">
-                                Jabatan Pengirim *
-                            </label>
-                            <input
-                                type="text"
-                                id="jabatanPengirim"
-                                name="jabatanPengirim"
-                                value={formData.jabatanPengirim}
-                                onChange={handleInputChange}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 placeholder-gray-500"
-                                placeholder="Masukkan jabatan pengirim"
-                                required
-                            />
-                        </div>
+                    <div className="bg-white rounded-lg p-4 text-center shadow-sm">
+                        <div className="text-2xl font-bold text-orange-600">{stats.mySent}</div>
+                        <div className="text-sm text-gray-600">Saya Kirim</div>
                     </div>
-                </div>
-
-                {/* Backup & Restore Section */}
-                <div className="bg-white rounded-xl shadow-lg p-6 sm:p-8 mb-8">
-                    <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-xl font-semibold text-gray-900">Backup & Restore</h2>
-                        <div className="flex gap-2">
-                            <button
-                                onClick={exportData}
-                                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-all text-sm flex items-center gap-2"
-                            >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                                Export Data
-                            </button>
-                            <label className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all text-sm flex items-center gap-2 cursor-pointer">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
-                                </svg>
-                                Import Data
-                                <input
-                                    type="file"
-                                    accept=".json"
-                                    onChange={importData}
-                                    className="hidden"
-                                />
-                            </label>
-                        </div>
-                    </div>
-                    <p className="text-sm text-gray-600">
-                        Ekspor data untuk backup atau impor data yang sudah ada. Data akan disimpan dalam format JSON.
-                    </p>
                 </div>
 
                 {/* Companies Section */}
@@ -947,14 +962,20 @@ Apakah Anda yakin ingin mengimpor data ini? Data yang ada sekarang akan ditimpa.
                                         </span>
                                     </div>
 
-                                    {/* Send Dates */}
+                                    {/* Send Info */}
                                     {(company.status.whatsapp.sent || company.status.email.sent) && (
                                         <div className="text-xs text-gray-500 mb-4 space-y-1">
-                                            {company.status.whatsapp.sent && company.status.whatsapp.dateSent && (
-                                                <p>WA: {formatDate(company.status.whatsapp.dateSent)}</p>
+                                            {company.status.whatsapp.sent && (
+                                                <div>
+                                                    <p>📱 WA: {company.status.whatsapp.dateSent && formatDate(company.status.whatsapp.dateSent)}</p>
+                                                    <p className="text-blue-600">👤 {company.status.whatsapp.sentByName}</p>
+                                                </div>
                                             )}
-                                            {company.status.email.sent && company.status.email.dateSent && (
-                                                <p>Email: {formatDate(company.status.email.dateSent)}</p>
+                                            {company.status.email.sent && (
+                                                <div>
+                                                    <p>📧 Email: {company.status.email.dateSent && formatDate(company.status.email.dateSent)}</p>
+                                                    <p className="text-blue-600">👤 {company.status.email.sentByName}</p>
+                                                </div>
                                             )}
                                         </div>
                                     )}
@@ -964,7 +985,7 @@ Apakah Anda yakin ingin mengimpor data ini? Data yang ada sekarang akan ditimpa.
                                         <div className="flex gap-2">
                                             <button
                                                 onClick={() => handleWhatsappSend(company)}
-                                                disabled={!isFormValid() || !company.nomorWhatsapp.trim()}
+                                                disabled={!userProfile || !company.nomorWhatsapp.trim()}
                                                 className="flex-1 bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all text-sm flex items-center justify-center gap-1"
                                             >
                                                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -974,7 +995,7 @@ Apakah Anda yakin ingin mengimpor data ini? Data yang ada sekarang akan ditimpa.
                                             </button>
                                             <button
                                                 onClick={() => handleEmailSend(company)}
-                                                disabled={!isFormValid() || !company.emailPerusahaan.trim()}
+                                                disabled={!userProfile || !company.emailPerusahaan.trim()}
                                                 className="flex-1 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all text-sm flex items-center justify-center gap-1"
                                             >
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1023,31 +1044,14 @@ Apakah Anda yakin ingin mengimpor data ini? Data yang ada sekarang akan ditimpa.
                                 📝 Petunjuk Penggunaan
                             </h3>
                             <ul className="text-yellow-700 space-y-1 text-sm">
-                                <li>• Isi data pengirim terlebih dahulu</li>
+                                <li>• Data pengirim otomatis terisi dari profile akun Anda</li>
                                 <li>• Tambahkan perusahaan target dengan menekan tombol "Tambah Perusahaan"</li>
                                 <li>• <strong>Minimal salah satu kontak (Email atau WhatsApp) harus diisi</strong></li>
                                 <li>• Klik tombol WhatsApp/Email pada card perusahaan untuk mengirim proposal</li>
-                                <li>• Status pengiriman akan otomatis terupdate dan tersimpan di device</li>
+                                <li>• Status pengiriman akan otomatis terupdate dengan data pengirim</li>
                                 <li>• File proposal harus dilampirkan secara manual setelah pesan terkirim</li>
                                 <li>• Gunakan tombol "Reset" jika ingin mengirim ulang ke perusahaan yang sama</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Warning Message */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                    <div className="flex items-start">
-                        <svg className="w-5 h-5 text-blue-600 mt-0.5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                        </svg>
-                        <div className="text-sm text-blue-700">
-                            <p><strong>Catatan Penting:</strong></p>
-                            <ul className="mt-1 list-disc list-inside space-y-1">
-                                <li>Data disimpan di browser lokal Anda</li>
-                                <li>Data akan hilang jika cache browser dibersihkan</li>
-                                <li>Gunakan fitur "Export Data" untuk backup manual</li>
-                                <li>Jangan gunakan mode incognito untuk data penting</li>
+                                <li>• Klik "History" untuk melihat riwayat pengiriman (pribadi/semua tim)</li>
                             </ul>
                         </div>
                     </div>

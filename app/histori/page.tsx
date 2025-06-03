@@ -1,6 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { createClient } from '@/utils/supabase/client'
+
+const supabase = createClient() // Tambahkan ini di luar komponen
 
 interface Company {
     id: string
@@ -18,6 +21,8 @@ interface Company {
             dateSent?: string
         }
     }
+    createdBy?: string
+    createdByName?: string // Tambahan
 }
 
 export default function HistoriPage() {
@@ -26,34 +31,92 @@ export default function HistoriPage() {
     const [filter, setFilter] = useState<'all' | 'sent' | 'pending'>('all')
     const [searchTerm, setSearchTerm] = useState('')
     const [isLoaded, setIsLoaded] = useState(false)
+    const [userId, setUserId] = useState<string | null>(null)
+    const [userFilter, setUserFilter] = useState<'all' | 'me'>('all')
 
     useEffect(() => {
-        try {
-            // Menggunakan key yang sama dengan halaman kirim-proposal
-            const savedCompanies = localStorage.getItem('himtika-proposal-companies')
-            console.log('Loading companies from localStorage:', savedCompanies)
+        const loadCompaniesFromSupabase = async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('companies')
+                    .select(`
+    id,
+    nama_perusahaan,
+    email_perusahaan,
+    nomor_whatsapp,
+    date_added,
+    created_by,
+    created_by_name,
+    whatsapp_sent,
+    whatsapp_date_sent,
+    whatsapp_sent_by,
+    whatsapp_sent_by_name,
+    whatsapp_sent_by_phone,
+    email_sent,
+    email_date_sent,
+    email_sent_by,
+    email_sent_by_name,
+    email_sent_by_phone
+  `)
+                    .order('date_added', { ascending: false })
 
-            if (savedCompanies) {
-                const companiesData = JSON.parse(savedCompanies)
-                setCompanies(companiesData)
-                setFilteredCompanies(companiesData)
-                console.log('Companies loaded:', companiesData)
+                if (error) throw error
+
+                const mapped = (data || []).map((item: any) => ({
+                    id: item.id,
+                    namaPerusahaan: item.nama_perusahaan,
+                    emailPerusahaan: item.email_perusahaan,
+                    nomorWhatsapp: item.nomor_whatsapp,
+                    dateAdded: item.date_added,
+                    createdBy: item.created_by,
+                    createdByName: item.created_by_name ?? '-', // <-- perbaiki di sini
+                    status: {
+                        whatsapp: {
+                            sent: item.whatsapp_sent,
+                            dateSent: item.whatsapp_date_sent || undefined,
+                        },
+                        email: {
+                            sent: item.email_sent,
+                            dateSent: item.email_date_sent || undefined,
+                        }
+                    }
+                }))
+                setCompanies(mapped)
+                setFilteredCompanies(mapped)
+            } catch (error) {
+                console.error('Error loading companies from Supabase:', error)
+                setCompanies([])
+                setFilteredCompanies([])
+            } finally {
+                setIsLoaded(true)
             }
-        } catch (error) {
-            console.error('Error loading companies from localStorage:', error)
-        } finally {
-            setIsLoaded(true)
         }
+
+        loadCompaniesFromSupabase()
+    }, [])
+
+    // Ambil userId dari Supabase saat mount
+    useEffect(() => {
+        const getUser = async () => {
+            const { data } = await supabase.auth.getUser()
+            setUserId(data?.user?.id ?? null)
+        }
+        getUser()
     }, [])
 
     useEffect(() => {
         let filtered = companies
 
+        // Filter by user
+        if (userFilter === 'me' && userId) {
+            filtered = filtered.filter(c => c.createdBy === userId)
+        }
+
         // Filter by status
         if (filter === 'sent') {
-            filtered = companies.filter(c => c.status.whatsapp.sent || c.status.email.sent)
+            filtered = filtered.filter(c => c.status.whatsapp.sent || c.status.email.sent)
         } else if (filter === 'pending') {
-            filtered = companies.filter(c => !c.status.whatsapp.sent && !c.status.email.sent)
+            filtered = filtered.filter(c => !c.status.whatsapp.sent && !c.status.email.sent)
         }
 
         // Filter by search term
@@ -65,7 +128,7 @@ export default function HistoriPage() {
         }
 
         setFilteredCompanies(filtered)
-    }, [companies, filter, searchTerm])
+    }, [companies, filter, searchTerm, userFilter, userId])
 
     const formatDate = (dateString: string) => {
         return new Date(dateString).toLocaleString('id-ID', {
@@ -183,6 +246,19 @@ export default function HistoriPage() {
                             </button>
                         </div>
                     </div>
+
+                    {/* Filter User */}
+                    <div className="flex gap-2 items-center mt-4">
+                        <label className="text-sm text-gray-700">Lihat:</label>
+                        <select
+                            value={userFilter}
+                            onChange={e => setUserFilter(e.target.value as 'all' | 'me')}
+                            className="px-3 py-2 border rounded-lg text-sm"
+                        >
+                            <option value="all">Semua User</option>
+                            <option value="me">User Saya</option>
+                        </select>
+                    </div>
                 </div>
 
                 {/* History Table */}
@@ -201,9 +277,16 @@ export default function HistoriPage() {
                                 }
                             </p>
                             {companies.length === 0 && (
-                                <p className="text-sm text-gray-400 mt-2">
-                                    Silakan tambahkan perusahaan di halaman "Kirim Proposal" terlebih dahulu
-                                </p>
+                                <div className="space-y-2 mt-4">
+                                    <p className="text-sm text-gray-400">
+                                        Silakan tambahkan perusahaan di halaman "Kirim Proposal" terlebih dahulu
+                                    </p>
+                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 max-w-md mx-auto">
+                                        <p className="text-sm text-blue-700">
+                                            💡 <strong>Info:</strong> Data akan tersinkronisasi otomatis
+                                        </p>
+                                    </div>
+                                </div>
                             )}
                         </div>
                     ) : (
@@ -226,6 +309,11 @@ export default function HistoriPage() {
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                             Ditambahkan
                                         </th>
+                                        {userFilter === 'all' && (
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Ditambahkan Oleh
+                                            </th>
+                                        )}
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
@@ -267,6 +355,11 @@ export default function HistoriPage() {
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                                 {formatDate(company.dateAdded)}
                                             </td>
+                                            {userFilter === 'all' && (
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                                    {company.createdByName}
+                                                </td>
+                                            )}
                                         </tr>
                                     ))}
                                 </tbody>

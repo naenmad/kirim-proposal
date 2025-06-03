@@ -1,15 +1,90 @@
+'use client'
+
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { createClient } from '@/utils/supabase/client'
+
+interface Stats {
+  totalCompanies: number
+  whatsappSent: number
+  emailSent: number
+  totalSent: number
+}
 
 export default function HomePage() {
+  const [stats, setStats] = useState<Stats>({
+    totalCompanies: 0,
+    whatsappSent: 0,
+    emailSent: 0,
+    totalSent: 0
+  })
+  const [loading, setLoading] = useState(true)
+
+  const supabase = createClient()
+
+  // Load statistics from Supabase
+  useEffect(() => {
+    const loadStats = async () => {
+      try {
+        setLoading(true)
+
+        const { data: companies, error } = await supabase
+          .from('companies')
+          .select('whatsapp_sent, email_sent')
+
+        if (error) {
+          console.error('Error loading stats:', error)
+          return
+        }
+
+        if (companies) {
+          const totalCompanies = companies.length
+          const whatsappSent = companies.filter(c => c.whatsapp_sent).length
+          const emailSent = companies.filter(c => c.email_sent).length
+          const totalSent = companies.filter(c => c.whatsapp_sent || c.email_sent).length
+
+          setStats({
+            totalCompanies,
+            whatsappSent,
+            emailSent,
+            totalSent
+          })
+        }
+      } catch (error) {
+        console.error('Error loading statistics:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadStats()
+
+    // Subscribe to real-time changes
+    const subscription = supabase
+      .channel('companies-changes')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'companies'
+      }, () => {
+        loadStats() // Reload stats when data changes
+      })
+      .subscribe()
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [supabase])
+
   const features = [
     {
       icon: (
         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
         </svg>
       ),
-      title: "Manajemen Perusahaan",
-      description: "Kelola daftar perusahaan target dengan informasi kontak lengkap dan terstruktur."
+      title: "Database Real-time",
+      description: "Data perusahaan tersimpan aman di cloud database dengan sinkronisasi real-time antar pengguna."
     },
     {
       icon: (
@@ -26,8 +101,8 @@ export default function HomePage() {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
         </svg>
       ),
-      title: "Tracking Otomatis",
-      description: "Pantau status pengiriman proposal dengan sistem tracking yang terintegrasi real-time."
+      title: "Analytics Dashboard",
+      description: "Dashboard analytics lengkap dengan statistik pengiriman dan tingkat respons perusahaan."
     },
     {
       icon: (
@@ -36,16 +111,16 @@ export default function HomePage() {
         </svg>
       ),
       title: "Histori Lengkap",
-      description: "Akses riwayat pengiriman proposal dengan detail waktu dan status untuk evaluasi."
+      description: "Riwayat pengiriman proposal dengan detail waktu, pengirim, dan status untuk evaluasi tim."
     },
     {
       icon: (
         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
         </svg>
       ),
-      title: "Export & Import",
-      description: "Backup dan restore data dengan fitur export/import JSON untuk keamanan data maksimal."
+      title: "Multi User Access",
+      description: "Sistem multi-user dengan autentikasi aman untuk kolaborasi tim HIMTIKA yang efektif."
     },
     {
       icon: (
@@ -58,11 +133,27 @@ export default function HomePage() {
     },
   ]
 
-  const stats = [
-    { name: "Fitur Utama", value: "6" },
-    { name: "Channel Pengiriman", value: "2" },
-    { name: "Backup System", value: "JSON" },
-    { name: "Open Source", value: "100%" },
+  const displayStats = [
+    {
+      name: "Total Perusahaan",
+      value: loading ? "..." : stats.totalCompanies.toString(),
+      color: "text-blue-600"
+    },
+    {
+      name: "WhatsApp Terkirim",
+      value: loading ? "..." : stats.whatsappSent.toString(),
+      color: "text-green-600"
+    },
+    {
+      name: "Email Terkirim",
+      value: loading ? "..." : stats.emailSent.toString(),
+      color: "text-purple-600"
+    },
+    {
+      name: "Total Pengiriman",
+      value: loading ? "..." : stats.totalSent.toString(),
+      color: "text-orange-600"
+    },
   ]
 
   return (
@@ -95,21 +186,71 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Stats Section */}
+      {/* Real-time Stats Section */}
       <section className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Yang Telah Kami Sediakan</h2>
-            <p className="text-gray-600">Fitur dan layanan yang sudah tersedia dalam sistem</p>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              📊 Statistik Pengiriman Real-time
+            </h2>
+            <p className="text-gray-600">Data terkini aktivitas pengiriman proposal sponsorship</p>
+            {loading && (
+              <div className="flex justify-center mt-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+              </div>
+            )}
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            {stats.map((stat) => (
+            {displayStats.map((stat) => (
               <div key={stat.name} className="text-center">
-                <div className="text-3xl font-bold text-blue-600 mb-2">{stat.value}</div>
-                <div className="text-gray-600">{stat.name}</div>
+                <div className={`text-3xl font-bold ${stat.color} mb-2 ${loading ? 'animate-pulse' : ''}`}>
+                  {stat.value}
+                </div>
+                <div className="text-gray-600 text-sm">{stat.name}</div>
               </div>
             ))}
           </div>
+
+          {/* Progress Bars */}
+          {!loading && stats.totalCompanies > 0 && (
+            <div className="mt-12 max-w-2xl mx-auto space-y-4">
+              <div className="text-center text-sm text-gray-500 mb-6">
+                Tingkat Pengiriman Proposal
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-gray-600">WhatsApp</span>
+                    <span className="text-green-600 font-medium">
+                      {Math.round((stats.whatsappSent / stats.totalCompanies) * 100)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-green-600 h-2 rounded-full transition-all duration-1000"
+                      style={{ width: `${(stats.whatsappSent / stats.totalCompanies) * 100}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-gray-600">Email</span>
+                    <span className="text-purple-600 font-medium">
+                      {Math.round((stats.emailSent / stats.totalCompanies) * 100)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-purple-600 h-2 rounded-full transition-all duration-1000"
+                      style={{ width: `${(stats.emailSent / stats.totalCompanies) * 100}%` }}
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
@@ -121,7 +262,7 @@ export default function HomePage() {
               Fitur Unggulan
             </h2>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Solusi lengkap untuk kebutuhan manajemen proposal sponsorship yang modern dan efektif.
+              Solusi lengkap berbasis cloud untuk kebutuhan manajemen proposal sponsorship yang modern dan efektif.
             </p>
           </div>
 
