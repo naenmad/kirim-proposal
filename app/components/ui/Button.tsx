@@ -1,6 +1,5 @@
 import React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
-import { cn } from '@/lib/utils'
 
 const buttonVariants = cva(
     'inline-flex items-center justify-center rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ring-offset-background',
@@ -31,7 +30,11 @@ const buttonVariants = cva(
     }
 )
 
-// Tambahkan tipe props Button
+// Simple className merger (tanpa external deps)
+function cn(...classes: (string | undefined)[]) {
+    return classes.filter(Boolean).join(' ')
+}
+
 export interface ButtonProps
     extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> { }
@@ -46,11 +49,3 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     )
 )
 Button.displayName = 'Button'
-
-    < Button
-variant = "ghost" // harus persis salah satu dari: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link" | "success" | "warning"
-size = "sm"       // harus persis salah satu dari: "default" | "sm" | "lg" | "icon" | "xs"
-onClick = { handleLoginClick }
-    >
-    Login
-</Button >
