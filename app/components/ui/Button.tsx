@@ -46,3 +46,11 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     )
 )
 Button.displayName = 'Button'
+
+    < Button
+variant = "ghost" // harus persis salah satu dari: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link" | "success" | "warning"
+size = "sm"       // harus persis salah satu dari: "default" | "sm" | "lg" | "icon" | "xs"
+onClick = { handleLoginClick }
+    >
+    Login
+</Button >
