@@ -2,8 +2,9 @@
 
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { Suspense } from 'react'
 
-export default function AuthCodeError() {
+function AuthCodeErrorContent() {
     const searchParams = useSearchParams()
     const error = searchParams.get('error')
 
@@ -56,5 +57,31 @@ export default function AuthCodeError() {
                 </p>
             </div>
         </div>
+    )
+}
+
+function LoadingFallback() {
+    return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4">
+            <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8 text-center">
+                <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                    <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+                <h1 className="text-2xl font-bold text-gray-900 mb-4">
+                    Memproses...
+                </h1>
+                <p className="text-gray-600">
+                    Sedang memuat informasi error
+                </p>
+            </div>
+        </div>
+    )
+}
+
+export default function AuthCodeError() {
+    return (
+        <Suspense fallback={<LoadingFallback />}>
+            <AuthCodeErrorContent />
+        </Suspense>
     )
 }

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Navbar from "./components/Navbar";
@@ -54,15 +54,12 @@ export const metadata: Metadata = {
     title: "HIMTIKA UNSIKA - Kirim Proposal Sponsorship",
     description: "Sistem manajemen pengiriman proposal sponsorship Himpunan Mahasiswa Informatika Universitas Singaperbangsa Karawang",
   },
+};
 
-  // Viewport
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 1,
-  },
-
-  // Theme Color
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#3b82f6' },
     { media: '(prefers-color-scheme: dark)', color: '#1e40af' },

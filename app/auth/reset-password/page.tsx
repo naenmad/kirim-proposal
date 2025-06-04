@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
-export default function ResetPasswordPage() {
+function ResetPasswordContent() {
     const [step, setStep] = useState<'request' | 'reset'>('request')
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
@@ -287,9 +287,7 @@ export default function ResetPasswordPage() {
                         </svg>
                         Kembali ke Login
                     </Link>
-                </div>
-
-                {/* Back to Home */}
+                </div>                {/* Back to Home */}
                 <div className="text-center">
                     <Link
                         href="/"
@@ -303,5 +301,38 @@ export default function ResetPasswordPage() {
                 </div>
             </div>
         </div>
+    )
+}
+
+function LoadingFallback() {
+    return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4">
+            <div className="max-w-md w-full space-y-8">
+                <div className="text-center">
+                    <div className="mx-auto w-16 h-16 bg-blue-600 rounded-xl flex items-center justify-center mb-4">
+                        <span className="text-white font-bold text-2xl">H</span>
+                    </div>
+                    <h2 className="text-3xl font-bold text-gray-900 mb-2">
+                        Memuat...
+                    </h2>
+                    <p className="text-gray-600">
+                        Sedang memproses permintaan reset password
+                    </p>
+                </div>
+                <div className="bg-white rounded-lg shadow-md p-8">
+                    <div className="flex justify-center">
+                        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+export default function ResetPasswordPage() {
+    return (
+        <Suspense fallback={<LoadingFallback />}>
+            <ResetPasswordContent />
+        </Suspense>
     )
 }
