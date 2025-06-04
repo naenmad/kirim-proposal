@@ -30,7 +30,7 @@ const buttonVariants = cva(
     }
 )
 
-// Simple className merger (tanpa external deps)
+// Simple className merger
 function cn(...classes: (string | undefined)[]) {
     return classes.filter(Boolean).join(' ')
 }
@@ -49,3 +49,6 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     )
 )
 Button.displayName = 'Button'
+
+// Tambahkan export default
+export default Button
