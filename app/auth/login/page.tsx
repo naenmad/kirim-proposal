@@ -94,8 +94,7 @@ function LoginContent() {
         setLoading(true)
         setError('')
 
-        try {
-            const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        try {            const { error } = await supabase.auth.resetPasswordForEmail(email, {
                 redirectTo: getAuthRedirectUrl('/auth/reset-password'),
             })
 

@@ -153,6 +153,5 @@ export async function GET(request: NextRequest) {
   } else {
     errorRedirectUrl = `${origin}/auth/auth-code-error?error=no_code`
   }
-
   return NextResponse.redirect(errorRedirectUrl)
 }
