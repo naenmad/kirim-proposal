@@ -1,13 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import { Button } from '@/components/ui/Button'
+import Button from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 
 export interface RegisterFormProps {
     onSuccess?: () => void
+    onSwitchToLogin?: () => void
     redirectTo?: string
     compact?: boolean
     className?: string
@@ -15,6 +16,7 @@ export interface RegisterFormProps {
 
 const RegisterForm: React.FC<RegisterFormProps> = ({
     onSuccess,
+    onSwitchToLogin,
     redirectTo = '/kirim-proposal',
     compact = false,
     className
@@ -30,68 +32,21 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
     const [message, setMessage] = useState('')
     const [showPassword, setShowPassword] = useState(false)
     const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-    const [passwordStrength, setPasswordStrength] = useState<'weak' | 'medium' | 'strong' | ''>('')
 
     const router = useRouter()
     const supabase = createClientComponentClient()
 
-    // Password strength checker
-    useEffect(() => {
-        if (formData.password) {
-            const hasUpper = /[A-Z]/.test(formData.password)
-            const hasLower = /[a-z]/.test(formData.password)
-            const hasNumber = /\d/.test(formData.password)
-            const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(formData.password)
-            const isLongEnough = formData.password.length >= 8
-
-            if (isLongEnough && hasUpper && hasLower && hasNumber && hasSpecial) {
-                setPasswordStrength('strong')
-            } else if (isLongEnough && ((hasUpper && hasLower) || (hasNumber && (hasUpper || hasLower)))) {
-                setPasswordStrength('medium')
-            } else {
-                setPasswordStrength('weak')
-            }
-        } else {
-            setPasswordStrength('')
-        }
-    }, [formData.password])
-
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, value } = e.target
-        setFormData(prev => ({
-            ...prev,
-            [name]: value
-        }))
-    }
-
-    const validateForm = () => {
-        if (!formData.fullName.trim()) {
-            setError('Nama lengkap harus diisi')
-            return false
-        }
-        if (!formData.email.trim()) {
-            setError('Email harus diisi')
-            return false
-        }
-        if (formData.password.length < 6) {
-            setError('Password minimal 6 karakter')
-            return false
-        }
-        if (formData.password !== formData.confirmPassword) {
-            setError('Konfirmasi password tidak cocok')
-            return false
-        }
-        return true
-    }
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
+        setLoading(true)
         setError('')
         setMessage('')
 
-        if (!validateForm()) return
-
-        setLoading(true)
+        if (formData.password !== formData.confirmPassword) {
+            setError('Password dan konfirmasi password tidak cocok')
+            setLoading(false)
+            return
+        }
 
         try {
             const { data, error } = await supabase.auth.signUp({
@@ -99,35 +54,34 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
                 password: formData.password,
                 options: {
                     data: {
-                        full_name: formData.fullName,
-                        display_name: formData.fullName
+                        display_name: formData.fullName,
                     },
-                    emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`
-                }
+                    emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
+                },
             })
 
             if (error) {
                 throw error
             }
 
-            if (data.user && !data.session) {
-                setMessage('Email konfirmasi telah dikirim! Silakan cek email Anda untuk mengaktifkan akun.')
-            } else if (data.session) {
-                // Auto login successful
-                if (onSuccess) {
-                    onSuccess()
+            if (data.user) {
+                if (data.user.email_confirmed_at) {
+                    setMessage('Akun berhasil dibuat! Anda akan diarahkan...')
+                    setTimeout(() => {
+                        if (onSuccess) {
+                            onSuccess()
+                        } else {
+                            router.push(redirectTo)
+                            router.refresh()
+                        }
+                    }, 2000)
                 } else {
-                    router.push(redirectTo)
-                    router.refresh()
+                    setMessage('Link konfirmasi telah dikirim ke email Anda. Silakan cek email untuk mengaktifkan akun.')
                 }
             }
         } catch (error: any) {
             console.error('Registration error:', error)
-            if (error.message?.includes('already registered')) {
-                setError('Email sudah terdaftar. Silakan gunakan email lain atau login.')
-            } else {
-                setError(error.message || 'Terjadi kesalahan saat pendaftaran')
-            }
+            setError(error.message || 'Terjadi kesalahan saat mendaftar')
         } finally {
             setLoading(false)
         }
@@ -155,24 +109,6 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
         }
     }
 
-    const getPasswordStrengthColor = () => {
-        switch (passwordStrength) {
-            case 'weak': return 'bg-red-500'
-            case 'medium': return 'bg-yellow-500'
-            case 'strong': return 'bg-green-500'
-            default: return 'bg-gray-300'
-        }
-    }
-
-    const getPasswordStrengthWidth = () => {
-        switch (passwordStrength) {
-            case 'weak': return 'w-1/3'
-            case 'medium': return 'w-2/3'
-            case 'strong': return 'w-full'
-            default: return 'w-0'
-        }
-    }
-
     const EyeIcon = () => (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -188,7 +124,12 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
 
     return (
         <div className={`space-y-6 ${className}`}>
-            {/* Error/Success Messages */}
+            <div>
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">Buat Akun Baru</h2>
+                <p className="text-gray-600">Bergabunglah dengan sistem manajemen proposal HIMTIKA UNSIKA.</p>
+            </div>
+
+            {/* Error Message */}
             {error && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                     <div className="flex">
@@ -200,6 +141,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
                 </div>
             )}
 
+            {/* Success Message */}
             {message && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                     <div className="flex">
@@ -255,14 +197,13 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
                 </div>
             )}
 
-            {/* Registration Form */}
+            {/* Register Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
                 <Input
                     label="Nama Lengkap"
-                    name="fullName"
                     type="text"
                     value={formData.fullName}
-                    onChange={handleInputChange}
+                    onChange={(e) => setFormData(prev => ({ ...prev, fullName: e.target.value }))}
                     placeholder="Masukkan nama lengkap"
                     required
                     leftIcon={
@@ -274,10 +215,9 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
 
                 <Input
                     label="Email"
-                    name="email"
                     type="email"
                     value={formData.email}
-                    onChange={handleInputChange}
+                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
                     placeholder="nama@email.com"
                     required
                     leftIcon={
@@ -287,54 +227,29 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
                     }
                 />
 
-                <div>
-                    <Input
-                        label="Password"
-                        name="password"
-                        type={showPassword ? 'text' : 'password'}
-                        value={formData.password}
-                        onChange={handleInputChange}
-                        placeholder="Minimal 6 karakter"
-                        required
-                        leftIcon={
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                            </svg>
-                        }
-                        rightIcon={showPassword ? <EyeOffIcon /> : <EyeIcon />}
-                        onRightIconClick={() => setShowPassword(!showPassword)}
-                    />
-
-                    {/* Password Strength Indicator */}
-                    {formData.password && (
-                        <div className="mt-2">
-                            <div className="flex justify-between items-center mb-1">
-                                <span className="text-xs text-gray-500">Kekuatan Password:</span>
-                                <span className={`text-xs font-medium ${passwordStrength === 'weak' ? 'text-red-500' :
-                                    passwordStrength === 'medium' ? 'text-yellow-500' :
-                                        passwordStrength === 'strong' ? 'text-green-500' : 'text-gray-400'
-                                    }`}>
-                                    {passwordStrength === 'weak' ? 'Lemah' :
-                                        passwordStrength === 'medium' ? 'Sedang' :
-                                            passwordStrength === 'strong' ? 'Kuat' : ''}
-                                </span>
-                            </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2">
-                                <div className={`h-2 rounded-full transition-all duration-300 ${getPasswordStrengthColor()} ${getPasswordStrengthWidth()}`}></div>
-                            </div>
-                        </div>
-                    )}
-                </div>
+                <Input
+                    label="Password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={formData.password}
+                    onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                    placeholder="Masukkan password"
+                    required
+                    leftIcon={
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                    }
+                    rightIcon={showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                    onRightIconClick={() => setShowPassword(!showPassword)}
+                />
 
                 <Input
                     label="Konfirmasi Password"
-                    name="confirmPassword"
                     type={showConfirmPassword ? 'text' : 'password'}
                     value={formData.confirmPassword}
-                    onChange={handleInputChange}
-                    placeholder="Ulangi password"
+                    onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                    placeholder="Konfirmasi password"
                     required
-                    error={formData.confirmPassword && formData.password !== formData.confirmPassword ? 'Password tidak cocok' : undefined}
                     leftIcon={
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -347,12 +262,27 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
                 <Button
                     type="submit"
                     className="w-full"
-                    loading={loading}
-                    disabled={loading || formData.password !== formData.confirmPassword}
+                    disabled={loading}
                 >
-                    Daftar Sekarang
+                    {loading ? 'Memproses...' : 'Daftar Sekarang'}
                 </Button>
             </form>
+
+            {/* Switch to Login */}
+            {onSwitchToLogin && (
+                <div className="text-center">
+                    <p className="text-sm text-gray-600">
+                        Sudah punya akun?{' '}
+                        <button
+                            type="button"
+                            onClick={onSwitchToLogin}
+                            className="text-blue-600 hover:text-blue-500 font-medium"
+                        >
+                            Masuk sekarang
+                        </button>
+                    </p>
+                </div>
+            )}
         </div>
     )
 }
