@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
-import { getAuthRedirectUrl } from '@/utils/url'
 
 export default function RegisterPage() {
     const [formData, setFormData] = useState({
@@ -24,6 +23,15 @@ export default function RegisterPage() {
 
     const router = useRouter()
     const supabase = createClient()
+
+    // Helper function to get callback URL
+    const getCallbackUrl = () => {
+        if (typeof window !== 'undefined') {
+            return `${window.location.origin}/auth/callback`
+        }
+        // Fallback for server-side rendering
+        return `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/auth/callback`
+    }
 
     const jabatanOptions = [
         { value: 'Koordinator Sponsorship', label: 'Koordinator Sponsorship' },
@@ -135,18 +143,25 @@ export default function RegisterPage() {
         setLoading(true)
 
         try {
-            console.log('Starting registration with data:', {
+            console.log('=== STARTING REGISTRATION ===')
+            console.log('Environment check:')
+            console.log('- Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL)
+            console.log('- Anon Key:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'Present' : 'Missing')
+            console.log('Form data:', {
                 email: formData.email,
                 fullName: formData.fullName,
                 phoneNumber: formData.phoneNumber,
                 jabatan: formData.jabatan
             })
 
+            const redirectUrl = getCallbackUrl()
+            console.log('Email redirect URL:', redirectUrl)
+
             const { data, error } = await supabase.auth.signUp({
                 email: formData.email,
                 password: formData.password,
                 options: {
-                    emailRedirectTo: getAuthRedirectUrl('/auth/callback'),
+                    emailRedirectTo: redirectUrl,
                     data: {
                         full_name: formData.fullName,
                         display_name: formData.fullName,
@@ -156,23 +171,86 @@ export default function RegisterPage() {
                 }
             })
 
-            console.log('Registration response:', { data, error })
+            console.log('=== REGISTRATION RESPONSE ===')
+            console.log('Data:', data)
+            console.log('Error:', error)
 
             if (error) {
+                console.error('Registration error:', error)
                 throw error
             }
 
             if (data.user) {
-                console.log('User created:', data.user.id)
-                console.log('User metadata sent:', data.user.user_metadata)
+                console.log('=== USER CREATED SUCCESSFULLY ===')
+                console.log('User ID:', data.user.id)
+                console.log('User email:', data.user.email)
+                console.log('Email confirmed at:', data.user.email_confirmed_at)
+                console.log('User metadata:', data.user.user_metadata)
 
-                if (data.user.email_confirmed_at) {
-                    setMessage('Akun berhasil dibuat! Anda akan dialihkan...')
-                    setTimeout(() => {
-                        router.push('/kirim-proposal')
-                    }, 2000)
+                // Check if email confirmation is disabled or user is auto-confirmed
+                const isDevelopment = process.env.NODE_ENV === 'development'
+                const isEmailConfirmed = !!data.user.email_confirmed_at
+
+                console.log('Development mode:', isDevelopment)
+                console.log('Email confirmed:', isEmailConfirmed)
+
+                if (isEmailConfirmed || isDevelopment) {
+                    // User is confirmed OR we're in development mode
+                    try {
+                        // Try to create profile immediately
+                        console.log('=== ATTEMPTING TO CREATE PROFILE ===')
+
+                        const profileData = {
+                            id: data.user.id,
+                            full_name: formData.fullName,
+                            email: formData.email,
+                            phone_number: formData.phoneNumber,
+                            jabatan: formData.jabatan,
+                            created_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString()
+                        }
+
+                        console.log('Profile data to insert:', profileData)
+
+                        const { data: insertedProfile, error: profileError } = await supabase
+                            .from('profiles')
+                            .insert([profileData])
+                            .select()
+                            .single()
+
+                        if (profileError) {
+                            console.error('Profile creation error:', profileError)
+                            console.log('Profile might be created by trigger, continuing...')
+                        } else {
+                            console.log('Profile created successfully:', insertedProfile)
+                        }
+
+                        // Show success and redirect
+                        setMessage('Akun berhasil dibuat! Anda akan dialihkan...')
+                        setTimeout(() => {
+                            router.push('/kirim-proposal')
+                        }, 2000)
+
+                    } catch (error) {
+                        console.error('Error in immediate profile creation:', error)
+                        // Still show success, profile might be created by trigger
+                        setMessage('Akun berhasil dibuat! Anda akan dialihkan...')
+                        setTimeout(() => {
+                            router.push('/kirim-proposal')
+                        }, 2000)
+                    }
                 } else {
-                    setMessage(`Email konfirmasi telah dikirim ke ${formData.email}. Silakan cek inbox dan spam folder Anda untuk mengaktifkan akun.`)
+                    console.log('=== EMAIL CONFIRMATION REQUIRED ===')
+                    setMessage(`✅ Email konfirmasi telah dikirim ke ${formData.email}. 
+
+📧 Silakan cek:
+• Inbox email Anda
+• Folder Spam/Junk
+• Folder Promosi (jika menggunakan Gmail)
+
+Klik link konfirmasi untuk mengaktifkan akun.
+
+⚠️ Jika email tidak diterima dalam 5 menit, hubungi administrator.`)
                     setFormData({
                         fullName: '',
                         email: '',
@@ -243,7 +321,7 @@ export default function RegisterPage() {
                         <span className="text-white font-bold text-2xl">H</span>
                     </div>
                     <h2 className="text-3xl font-bold text-gray-900 mb-2">
-                        Daftar ke HIMTIKA
+                        Daftar ke Prosal System
                     </h2>
                     <p className="text-gray-600">
                         Bergabung dengan Sistem Manajemen Proposal Sponsorship
@@ -429,14 +507,9 @@ export default function RegisterPage() {
                                 className="absolute inset-y-0 right-0 pr-3 flex items-center"
                             >
                                 {showPassword ? (
-                                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
-                                    </svg>
+                                    <span className="text-gray-400">👁️‍🗨️</span>
                                 ) : (
-                                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                    </svg>
+                                    <span className="text-gray-400">👁️</span>
                                 )}
                             </button>
                         </div>
@@ -516,14 +589,9 @@ export default function RegisterPage() {
                                 className="absolute inset-y-0 right-0 pr-3 flex items-center"
                             >
                                 {showConfirmPassword ? (
-                                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
-                                    </svg>
+                                    <span className="text-gray-400">👁️‍🗨️</span>
                                 ) : (
-                                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                    </svg>
+                                    <span className="text-gray-400">👁️</span>
                                 )}
                             </button>
                         </div>

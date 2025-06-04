@@ -3,8 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import Button from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
+import Button from '@/components/auth/ui/Button'
+import { Input } from '@/components/auth/ui/Input'
 import { getAuthRedirectUrl } from '@/utils/url'
 
 export interface LoginFormProps {

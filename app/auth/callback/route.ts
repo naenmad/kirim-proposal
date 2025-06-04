@@ -29,54 +29,56 @@ export async function GET(request: NextRequest) {
             updated_at: new Date().toISOString()
           }
 
-          console.log('Creating profile from callback:', profileData)
+          console.log('=== PROFILE CREATION DEBUG ===')
+          console.log('User ID:', data.user.id)
+          console.log('User email:', data.user.email)
+          console.log('User metadata:', userMetadata)
+          console.log('Profile data to insert:', profileData)
 
-          // First check if profile exists
-          const { data: existingProfile, error: checkError } = await supabase
+          // Try to insert profile directly (simpler approach for development)
+          const { data: insertedProfile, error: insertError } = await supabase
             .from('profiles')
-            .select('id')
-            .eq('id', data.user.id)
+            .insert([profileData])
+            .select()
             .single()
 
-          if (checkError && checkError.code === 'PGRST116') {
-            // Profile doesn't exist, create it
-            const { data: insertedProfile, error: insertError } = await supabase
-              .from('profiles')
-              .insert([profileData])
-              .select()
+          if (insertError) {
+            console.error('=== PROFILE INSERT ERROR ===')
+            console.error('Error code:', insertError.code)
+            console.error('Error message:', insertError.message)
+            console.error('Error details:', JSON.stringify(insertError, null, 2))
 
-            if (insertError) {
-              console.error('Failed to insert profile:', insertError)
-              console.error('Insert error details:', JSON.stringify(insertError, null, 2))
-            } else {
-              console.log('Profile created successfully:', insertedProfile)
-            }
-          } else if (!checkError && existingProfile) {
-            // Profile exists, update it
-            const { data: updatedProfile, error: updateError } = await supabase
-              .from('profiles')
-              .update({
-                full_name: profileData.full_name,
-                email: profileData.email,
-                phone_number: profileData.phone_number,
-                jabatan: profileData.jabatan,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', data.user.id)
-              .select()
+            // If profile already exists, try to update it
+            if (insertError.code === '23505') { // Unique constraint violation
+              console.log('Profile already exists, trying to update...')
+              const { data: updatedProfile, error: updateError } = await supabase
+                .from('profiles')
+                .update({
+                  full_name: profileData.full_name,
+                  email: profileData.email,
+                  phone_number: profileData.phone_number,
+                  jabatan: profileData.jabatan,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', data.user.id)
+                .select()
+                .single()
 
-            if (updateError) {
-              console.error('Failed to update profile:', updateError)
-            } else {
-              console.log('Profile updated successfully:', updatedProfile)
+              if (updateError) {
+                console.error('Profile update error:', updateError)
+              } else {
+                console.log('Profile updated successfully:', updatedProfile)
+              }
             }
           } else {
-            console.error('Error checking existing profile:', checkError)
+            console.log('=== PROFILE CREATED SUCCESSFULLY ===')
+            console.log('Created profile:', insertedProfile)
           }
         } catch (profileError) {
-          console.error('Profile handling error in callback:', profileError)
-          // Don't block the redirect
-        }        // Successful email confirmation - redirect to success page
+          console.error('=== PROFILE HANDLING CRITICAL ERROR ===')
+          console.error('Error:', profileError)
+          // Don't block the redirect, just log the error
+        }// Successful email confirmation - redirect to success page
         const forwardedHost = request.headers.get('x-forwarded-host')
         const forwardedProto = request.headers.get('x-forwarded-proto')
         const host = request.headers.get('host')
