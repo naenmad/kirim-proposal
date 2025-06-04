@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import Button from '@/components/ui/Button' // Ubah ini - hapus kurung kurawal
+import Button from '@/components/ui/Button' // Import default
 import { User } from '@supabase/supabase-js'
 
 export interface AuthButtonProps {
