@@ -1,5 +1,8 @@
 import { createClient } from '@/utils/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import type { Database } from '@/types/database'
+
+type ProfileInsert = Database['public']['Tables']['profiles']['Insert']
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
@@ -12,13 +15,11 @@ export async function GET(request: NextRequest) {
       const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
       if (!error && data.user) {
-        console.log('User confirmed email:', data.user.id)
-
-        // Create profile with retry mechanism
+        console.log('User confirmed email:', data.user.id)        // Create profile with retry mechanism
         try {
           const userMetadata = data.user.user_metadata || {}
 
-          const profileData = {
+          const profileData: ProfileInsert = {
             id: data.user.id,
             full_name: userMetadata.full_name || userMetadata.display_name || '',
             email: data.user.email || '',
@@ -75,30 +76,81 @@ export async function GET(request: NextRequest) {
         } catch (profileError) {
           console.error('Profile handling error in callback:', profileError)
           // Don't block the redirect
-        }
-
-        // Successful email confirmation - redirect to success page
+        }        // Successful email confirmation - redirect to success page
         const forwardedHost = request.headers.get('x-forwarded-host')
+        const forwardedProto = request.headers.get('x-forwarded-proto')
+        const host = request.headers.get('host')
         const isLocalEnv = process.env.NODE_ENV === 'development'
 
+        let redirectUrl: string
+
         if (isLocalEnv) {
-          return NextResponse.redirect(`${origin}${next}`)
+          // Development environment
+          redirectUrl = `${origin}${next}`
         } else if (forwardedHost) {
-          return NextResponse.redirect(`https://${forwardedHost}${next}`)
+          // Production with forwarded host (Vercel)
+          const protocol = forwardedProto || 'https'
+          redirectUrl = `${protocol}://${forwardedHost}${next}`
+        } else if (host) {
+          // Fallback to host header
+          redirectUrl = `https://${host}${next}`
         } else {
-          return NextResponse.redirect(`${origin}${next}`)
+          // Final fallback
+          redirectUrl = `${origin}${next}`
         }
+
+        console.log('Redirecting to:', redirectUrl)
+        return NextResponse.redirect(redirectUrl)
       } else {
         console.error('Auth exchange error:', error)
         throw error
       }
     } catch (error) {
       console.error('Auth callback error:', error)
-      return NextResponse.redirect(`${origin}/auth/auth-code-error?error=exchange_failed`)
+
+      // Get proper redirect URL for error page
+      const forwardedHost = request.headers.get('x-forwarded-host')
+      const forwardedProto = request.headers.get('x-forwarded-proto')
+      const host = request.headers.get('host')
+      const isLocalEnv = process.env.NODE_ENV === 'development'
+
+      let errorRedirectUrl: string
+
+      if (isLocalEnv) {
+        errorRedirectUrl = `${origin}/auth/auth-code-error?error=exchange_failed`
+      } else if (forwardedHost) {
+        const protocol = forwardedProto || 'https'
+        errorRedirectUrl = `${protocol}://${forwardedHost}/auth/auth-code-error?error=exchange_failed`
+      } else if (host) {
+        errorRedirectUrl = `https://${host}/auth/auth-code-error?error=exchange_failed`
+      } else {
+        errorRedirectUrl = `${origin}/auth/auth-code-error?error=exchange_failed`
+      }
+
+      return NextResponse.redirect(errorRedirectUrl)
     }
   }
-
   // No code provided
   console.error('No auth code provided in callback')
-  return NextResponse.redirect(`${origin}/auth/auth-code-error?error=no_code`)
+
+  // Get proper redirect URL for error page
+  const forwardedHost = request.headers.get('x-forwarded-host')
+  const forwardedProto = request.headers.get('x-forwarded-proto')
+  const host = request.headers.get('host')
+  const isLocalEnv = process.env.NODE_ENV === 'development'
+
+  let errorRedirectUrl: string
+
+  if (isLocalEnv) {
+    errorRedirectUrl = `${origin}/auth/auth-code-error?error=no_code`
+  } else if (forwardedHost) {
+    const protocol = forwardedProto || 'https'
+    errorRedirectUrl = `${protocol}://${forwardedHost}/auth/auth-code-error?error=no_code`
+  } else if (host) {
+    errorRedirectUrl = `https://${host}/auth/auth-code-error?error=no_code`
+  } else {
+    errorRedirectUrl = `${origin}/auth/auth-code-error?error=no_code`
+  }
+
+  return NextResponse.redirect(errorRedirectUrl)
 }

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
+import { getAuthRedirectUrl } from '@/utils/url'
 
 export default function RegisterPage() {
     const [formData, setFormData] = useState({
@@ -25,7 +26,7 @@ export default function RegisterPage() {
     const supabase = createClient()
 
     const jabatanOptions = [
-        { value: 'Ketua Sponsorship', label: 'Ketua Sponsorship' },
+        { value: 'Koordinator Sponsorship', label: 'Koordinator Sponsorship' },
         { value: 'Anggota Sponsorship', label: 'Anggota Sponsorship' }
     ]
 
@@ -145,7 +146,7 @@ export default function RegisterPage() {
                 email: formData.email,
                 password: formData.password,
                 options: {
-                    emailRedirectTo: `${window.location.origin}/auth/callback`,
+                    emailRedirectTo: getAuthRedirectUrl('/auth/callback'),
                     data: {
                         full_name: formData.fullName,
                         display_name: formData.fullName,
@@ -445,8 +446,8 @@ export default function RegisterPage() {
                                 <div className="flex justify-between items-center mb-1">
                                     <span className="text-xs text-gray-500">Kekuatan Password:</span>
                                     <span className={`text-xs font-medium ${passwordStrength === 'weak' ? 'text-red-500' :
-                                            passwordStrength === 'medium' ? 'text-yellow-500' :
-                                                passwordStrength === 'strong' ? 'text-green-500' : 'text-gray-400'
+                                        passwordStrength === 'medium' ? 'text-yellow-500' :
+                                            passwordStrength === 'strong' ? 'text-green-500' : 'text-gray-400'
                                         }`}>
                                         {passwordStrength === 'weak' ? 'Lemah ❌' :
                                             passwordStrength === 'medium' ? 'Sedang ⚠️' :
@@ -555,8 +556,8 @@ export default function RegisterPage() {
                         type="submit"
                         disabled={loading || passwordStrength === 'weak' || passwordStrength === ''}
                         className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors ${loading || passwordStrength === 'weak' || passwordStrength === ''
-                                ? 'bg-gray-400 cursor-not-allowed opacity-50'
-                                : 'bg-blue-600 hover:bg-blue-700'
+                            ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                            : 'bg-blue-600 hover:bg-blue-700'
                             }`}
                     >
                         {loading ? (

@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { getAuthRedirectUrl } from '@/utils/url'
 
 function ResetPasswordContent() {
     const [step, setStep] = useState<'request' | 'reset'>('request')
@@ -49,7 +50,7 @@ function ResetPasswordContent() {
 
         try {
             const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                redirectTo: `${window.location.origin}/auth/reset-password`,
+                redirectTo: getAuthRedirectUrl('/auth/reset-password'),
             })
 
             if (error) {

@@ -302,10 +302,8 @@ export default function KirimProposalPage() {
             if (!profileData) {
                 showNotification('error', 'Profile Tidak Ditemukan', 'Profile tidak ditemukan. Silakan hubungi administrator.')
                 return
-            }
-
-            setUserProfile(profileData)
-            await loadCompanies()
+            } setUserProfile(profileData)
+            await loadCompanies(session.user.id) // Pass user ID directly
 
         } catch (error) {
             console.error('Auth error:', error)
@@ -313,15 +311,23 @@ export default function KirimProposalPage() {
             router.push('/auth/login')
         } finally {
             setIsLoading(false)
-            setIsLoaded(true)
-        }
+            setIsLoaded(true)        }
     }
 
-    const loadCompanies = async () => {
+    const loadCompanies = async (userId?: string) => {
         try {
+            // Use passed userId or fallback to user state
+            const currentUserId = userId || user?.id
+            
+            if (!currentUserId) {
+                console.log('No user ID available, skipping company load')
+                return
+            }
+
             const { data: companiesData, error: companiesError } = await supabase
                 .from('companies')
                 .select('*')
+                .eq('created_by', currentUserId) // Filter by current user
                 .order('created_at', { ascending: false })
 
             if (companiesError) {
@@ -351,9 +357,9 @@ export default function KirimProposalPage() {
                         sentByName: company.email_sent_by_name,
                         sentByPhone: company.email_sent_by_phone
                     }
-                }
-            }))
+                }            }))
 
+            console.log(`Loaded ${transformedCompanies.length} companies for user ${currentUserId}`)
             setCompanies(transformedCompanies)
 
         } catch (error) {

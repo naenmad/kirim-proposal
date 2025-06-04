@@ -107,7 +107,7 @@ yarn dev
 pnpm dev
 ```
 
-Buka [http://localhost:3000](http://localhost:3000) di browser untuk melihat hasilnya.
+Buka [https://himtika-proposal-system.vercel.app](https://himtika-proposal-system.vercel.app0) di browser untuk melihat hasilnya.
 
 ### **Build untuk Production**
 ```bash

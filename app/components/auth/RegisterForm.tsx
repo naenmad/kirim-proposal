@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import Button from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { getAuthRedirectUrl } from '@/utils/url'
 
 export interface RegisterFormProps {
     onSuccess?: () => void
@@ -56,7 +57,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
                     data: {
                         display_name: formData.fullName,
                     },
-                    emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
+                    emailRedirectTo: getAuthRedirectUrl(`/auth/callback?next=${encodeURIComponent(redirectTo)}`),
                 },
             })
 
@@ -95,7 +96,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
             const { error } = await supabase.auth.signInWithOAuth({
                 provider,
                 options: {
-                    redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
+                    redirectTo: getAuthRedirectUrl(`/auth/callback?next=${encodeURIComponent(redirectTo)}`),
                 },
             })
 
