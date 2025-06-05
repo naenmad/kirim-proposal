@@ -140,7 +140,10 @@ export default function HistoriPage() {
         })
     }
 
-    const getStatusBadge = (sent: boolean) => {
+    const getStatusBadge = (sent: boolean, hasContact: boolean) => {
+        if (!hasContact) {
+            return <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">Tidak Ada</span>
+        }
         return sent ? (
             <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">Terkirim</span>
         ) : (
@@ -334,7 +337,7 @@ export default function HistoriPage() {
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="space-y-1">
-                                                    {getStatusBadge(company.status.whatsapp.sent)}
+                                                    {getStatusBadge(company.status.whatsapp.sent, !!company.nomorWhatsapp)}
                                                     {company.status.whatsapp.sent && company.status.whatsapp.dateSent && (
                                                         <div className="text-xs text-gray-500">
                                                             {formatDate(company.status.whatsapp.dateSent)}
@@ -344,7 +347,7 @@ export default function HistoriPage() {
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="space-y-1">
-                                                    {getStatusBadge(company.status.email.sent)}
+                                                    {getStatusBadge(company.status.email.sent, !!company.emailPerusahaan)}
                                                     {company.status.email.sent && company.status.email.dateSent && (
                                                         <div className="text-xs text-gray-500">
                                                             {formatDate(company.status.email.dateSent)}

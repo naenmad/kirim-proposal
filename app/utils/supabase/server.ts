@@ -4,9 +4,17 @@ import { cookies } from 'next/headers'
 export const createClient = async () => {
   const cookieStore = await cookies()
 
+  // Gunakan string kosong sebagai fallback untuk mencegah error undefined
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+
+  if (!supabaseUrl || !supabaseKey) {
+    console.error('CRITICAL SERVER ERROR: Missing Supabase environment variables!')
+  }
+
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseKey,
     {
       cookies: {
         getAll() {

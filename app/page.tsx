@@ -21,34 +21,82 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true)
 
   const supabase = createClient()
-
   // Load statistics from Supabase
   useEffect(() => {
     const loadStats = async () => {
       try {
         setLoading(true)
 
-        const { data: companies, error } = await supabase
-          .from('companies')
-          .select('whatsapp_sent, email_sent')
+        // Cek apakah pengguna sudah login
+        const { data: { session } } = await supabase.auth.getSession()
 
-        if (error) {
-          console.error('Error loading stats:', error)
-          return
-        }
+        if (session) {
+          // Pengguna sudah login, gunakan query normal
+          const { data: companies, error } = await supabase
+            .from('companies')
+            .select('whatsapp_sent, email_sent')
 
-        if (companies) {
-          const totalCompanies = companies.length
-          const whatsappSent = companies.filter(c => c.whatsapp_sent).length
-          const emailSent = companies.filter(c => c.email_sent).length
-          const totalSent = companies.filter(c => c.whatsapp_sent || c.email_sent).length
+          if (error) {
+            console.error('Error loading stats:', error)
+            return
+          }
 
-          setStats({
-            totalCompanies,
-            whatsappSent,
-            emailSent,
-            totalSent
-          })
+          if (companies) {
+            const totalCompanies = companies.length
+            const whatsappSent = companies.filter(c => c.whatsapp_sent).length
+            const emailSent = companies.filter(c => c.email_sent).length
+            const totalSent = companies.filter(c => c.whatsapp_sent || c.email_sent).length
+
+            setStats({
+              totalCompanies,
+              whatsappSent,
+              emailSent,
+              totalSent
+            })
+          }        } else {
+          // Pengguna belum login, gunakan function khusus untuk statistik publik
+          const { data, error } = await supabase
+            .rpc('get_public_stats')
+            .single()
+
+          if (error) {
+            // Jika function RPC belum ada, gunakan query publik dengan agregasi
+            console.log('RPC not available, trying public aggregation query')
+
+            // Alternatif: Gunakan public view
+            const { data: publicStats, error: viewError } = await supabase
+              .from('public_stats')
+              .select('*')
+              .single()
+
+            if (viewError) {
+              console.error('Error loading public stats view:', viewError)
+              return
+            }
+
+            if (publicStats) {
+              setStats({
+                totalCompanies: publicStats.total_companies || 0,
+                whatsappSent: publicStats.whatsapp_sent || 0,
+                emailSent: publicStats.email_sent || 0,
+                totalSent: publicStats.total_sent || 0
+              })
+            }
+          } else if (data) {            // Add type assertion to inform TypeScript about the shape of the data
+            const typedData = data as {
+              total_companies: number;
+              whatsapp_sent: number;
+              email_sent: number;
+              total_sent: number;
+            };
+            
+            setStats({
+              totalCompanies: typedData.total_companies || 0,
+              whatsappSent: typedData.whatsapp_sent || 0,
+              emailSent: typedData.email_sent || 0,
+              totalSent: typedData.total_sent || 0
+            })
+          }
         }
       } catch (error) {
         console.error('Error loading statistics:', error)

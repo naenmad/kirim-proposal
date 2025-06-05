@@ -28,9 +28,7 @@ function LoginContent() {
             }
         }
         checkSession()
-    }, [supabase.auth, router, searchParams])
-
-    // Handle URL error messages
+    }, [supabase.auth, router, searchParams])    // Handle URL error messages
     useEffect(() => {
         const urlError = searchParams.get('error')
         const urlMessage = searchParams.get('message')
@@ -63,13 +61,31 @@ function LoginContent() {
         setMessage('')
 
         try {
+            console.log('Login attempt with:', {
+                emailProvided: !!email,
+                passwordProvided: !!password,
+                supabaseInitialized: !!supabase,
+                envVarsPresent: {
+                    url: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+                    key: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+                }
+            });
+
             const { data, error } = await supabase.auth.signInWithPassword({
                 email,
                 password,
-            })
+            });
 
             if (error) {
-                throw error
+                console.error('Login error details:', error);
+                if (error.message.includes('Invalid API key')) {
+                    console.error('API Key Error - Check .env.local configuration');
+                    console.error('URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
+                    console.error('Key length:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.length : 0);
+                    setError('Error konfigurasi API Supabase. Hubungi administrator.');
+                } else {
+                    throw error;
+                }
             }
 
             if (data.user) {

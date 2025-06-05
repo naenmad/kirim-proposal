@@ -980,15 +980,13 @@ Website: https://himtika.cs.unsika.ac.id/`
                                             <p className="text-gray-400">📱 WhatsApp tidak dimasukkan</p>
                                         )}
                                         <p className="text-xs">Ditambahkan: {formatDate(company.dateAdded)}</p>
-                                    </div>
-
-                                    {/* Status Badges */}
+                                    </div>                                    {/* Status Badges */}
                                     <div className="flex gap-2 mb-4">
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(company.status.whatsapp.sent)}`}>
-                                            WhatsApp: {company.status.whatsapp.sent ? 'Terkirim' : 'Belum'}
+                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${!company.nomorWhatsapp ? 'bg-gray-100 text-gray-600' : getStatusColor(company.status.whatsapp.sent)}`}>
+                                            WhatsApp: {!company.nomorWhatsapp ? 'Tidak Ada' : (company.status.whatsapp.sent ? 'Terkirim' : 'Belum')}
                                         </span>
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(company.status.email.sent)}`}>
-                                            Email: {company.status.email.sent ? 'Terkirim' : 'Belum'}
+                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${!company.emailPerusahaan ? 'bg-gray-100 text-gray-600' : getStatusColor(company.status.email.sent)}`}>
+                                            Email: {!company.emailPerusahaan ? 'Tidak Ada' : (company.status.email.sent ? 'Terkirim' : 'Belum')}
                                         </span>
                                     </div>
 
