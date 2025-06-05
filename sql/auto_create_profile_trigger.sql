@@ -40,5 +40,5 @@ WHERE NOT EXISTS (SELECT 1 FROM public.profiles WHERE profiles.id = auth.users.i
 -- 5. Verifikasi bahwa trigger sudah bekerja
 SELECT trigger_name, event_manipulation, action_statement 
 FROM information_schema.triggers 
-WHERE event_object_table = 'users' 
+WHERE event_object_table = 'users'  
   AND event_object_schema = 'auth';

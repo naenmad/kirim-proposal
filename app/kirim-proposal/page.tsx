@@ -236,6 +236,27 @@ export default function KirimProposalPage() {
     const router = useRouter()
     const supabase = createClient()
 
+    // Fungsi untuk memeriksa duplikasi perusahaan
+    const checkCompanyExists = async (namaPerusahaan: string): Promise<boolean> => {
+        try {
+            // Gunakan SELECT COUNT untuk performa lebih baik
+            const { count, error } = await supabase
+                .from('companies')
+                .select('*', { count: 'exact', head: true })
+                .ilike('nama_perusahaan', namaPerusahaan.trim())
+
+            if (error) {
+                console.error('Error checking company existence:', error)
+                return false
+            }
+
+            return count !== null && count > 0
+        } catch (error) {
+            console.error('Exception checking company existence:', error)
+            return false
+        }
+    }
+
     const [notification, setNotification] = useState<{
         isVisible: boolean
         type: 'success' | 'error' | 'warning' | 'info'
@@ -413,6 +434,13 @@ export default function KirimProposalPage() {
 
         if (!newCompany.emailPerusahaan.trim() && !newCompany.nomorWhatsapp.trim()) {
             showNotification('warning', 'Kontak Diperlukan', 'Minimal salah satu kontak (Email atau WhatsApp) harus diisi!')
+            return
+        }
+
+        // Cek apakah perusahaan sudah ada
+        const exists = await checkCompanyExists(newCompany.namaPerusahaan)
+        if (exists) {
+            showNotification('error', 'Perusahaan Sudah Ada', 'Perusahaan ini sudah ada di dalam daftar. Silakan periksa kembali.')
             return
         }
 
@@ -635,10 +663,8 @@ Website: https://himtika.cs.unsika.ac.id/`
         if (!userProfile) {
             showNotification('error', 'Profile Error', 'Data profile tidak ditemukan!')
             return
-        }
-
-        if (!company.nomorWhatsapp.trim()) {
-            showNotification('error', 'WhatsApp Tidak Tersedia', 'Nomor WhatsApp tidak tersedia untuk perusahaan ini!')
+        } if (!company.nomorWhatsapp.trim()) {
+            showNotification('error', 'WhatsApp Tidak Tersedia', 'Nomor WhatsApp tidak dimasukkan untuk perusahaan ini!')
             return
         }
 
@@ -660,10 +686,8 @@ Website: https://himtika.cs.unsika.ac.id/`
         if (!userProfile) {
             showNotification('error', 'Profile Error', 'Data profile tidak ditemukan!')
             return
-        }
-
-        if (!company.emailPerusahaan.trim()) {
-            showNotification('error', 'Email Tidak Tersedia', 'Email tidak tersedia untuk perusahaan ini!')
+        } if (!company.emailPerusahaan.trim()) {
+            showNotification('error', 'Email Tidak Tersedia', 'Email tidak dimasukkan untuk perusahaan ini!')
             return
         }
 
@@ -944,18 +968,16 @@ Website: https://himtika.cs.unsika.ac.id/`
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                             </svg>
                                         </button>
-                                    </div>
-
-                                    <div className="space-y-2 mb-4 text-sm text-gray-600">
+                                    </div>                                    <div className="space-y-2 mb-4 text-sm text-gray-600">
                                         {company.emailPerusahaan ? (
                                             <p>📧 {company.emailPerusahaan}</p>
                                         ) : (
-                                            <p className="text-gray-400">📧 Email tidak tersedia</p>
+                                            <p className="text-gray-400">📧 Email tidak dimasukkan</p>
                                         )}
                                         {company.nomorWhatsapp ? (
                                             <p>📱 {company.nomorWhatsapp}</p>
                                         ) : (
-                                            <p className="text-gray-400">📱 WhatsApp tidak tersedia</p>
+                                            <p className="text-gray-400">📱 WhatsApp tidak dimasukkan</p>
                                         )}
                                         <p className="text-xs">Ditambahkan: {formatDate(company.dateAdded)}</p>
                                     </div>
