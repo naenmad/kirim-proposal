@@ -80,10 +80,8 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 items-center">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-indigo-500 flex items-center justify-center shadow group-hover:scale-105 transition">
-              <span className="text-white font-bold text-lg">H</span>
-            </div>
+          <Link href="/" className="flex items-center gap-1 group">
+            <img src="/logo.svg" alt="HIMTIKA Logo" className="w-25 h-25 group-hover:scale-105 transition" />
             <div className="flex flex-col leading-tight">
               <span className="text-xl font-extrabold text-gray-900 tracking-tight">HIMTIKA</span>
               <span className="text-xs text-gray-400 font-medium">Proposal System</span>

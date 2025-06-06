@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
+import Link from 'next/link'
+import NotificationModal from '@/components/ui/NotificationModal'
 
 export default function RegisterPage() {
     const [formData, setFormData] = useState({
@@ -14,12 +15,23 @@ export default function RegisterPage() {
         confirmPassword: '',
         jabatan: ''
     })
+
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
     const [message, setMessage] = useState('')
     const [showPassword, setShowPassword] = useState(false)
     const [showConfirmPassword, setShowConfirmPassword] = useState(false)
     const [passwordStrength, setPasswordStrength] = useState<'weak' | 'medium' | 'strong' | ''>('')
+
+    // Modal states
+    const [showModal, setShowModal] = useState(false)
+    const [modalConfig, setModalConfig] = useState({
+        title: '',
+        message: '',
+        type: 'info' as 'success' | 'info' | 'warning' | 'error',
+        autoClose: false,
+        autoCloseDelay: 5000
+    })
 
     const router = useRouter()
     const supabase = createClient()
@@ -154,6 +166,21 @@ export default function RegisterPage() {
                 jabatan: formData.jabatan
             })
 
+            // Check if email already exists before attempting registration
+            const { data: existingUsers, error: checkError } = await supabase
+                .from('profiles')
+                .select('email')
+                .eq('email', formData.email)
+                .limit(1)
+
+            if (checkError) {
+                console.error('Error checking existing email:', checkError)
+            } else if (existingUsers && existingUsers.length > 0) {
+                setError('Email sudah terdaftar. Silakan gunakan email lain atau login.')
+                setLoading(false)
+                return
+            }
+
             const redirectUrl = getCallbackUrl()
             console.log('Email redirect URL:', redirectUrl)
 
@@ -196,61 +223,54 @@ export default function RegisterPage() {
 
                 if (isEmailConfirmed || isDevelopment) {
                     // User is confirmed OR we're in development mode
-                    try {
-                        // Try to create profile immediately
-                        console.log('=== ATTEMPTING TO CREATE PROFILE ===')
+                    // Profile will be created by the callback handler
+                    console.log('=== USER CONFIRMED - PROFILE WILL BE CREATED VIA CALLBACK ===')
 
-                        const profileData = {
-                            id: data.user.id,
-                            full_name: formData.fullName,
-                            email: formData.email,
-                            phone_number: formData.phoneNumber,
-                            jabatan: formData.jabatan,
-                            created_at: new Date().toISOString(),
-                            updated_at: new Date().toISOString()
-                        }
+                    setModalConfig({
+                        title: '🎉 Akun Berhasil Dibuat!',
+                        message: `Selamat! Akun Anda telah berhasil dibuat dan dikonfirmasi.
 
-                        console.log('Profile data to insert:', profileData)
+✅ Email: ${formData.email}
+👤 Nama: ${formData.fullName}
+📋 Jabatan: ${formData.jabatan}
 
-                        const { data: insertedProfile, error: profileError } = await supabase
-                            .from('profiles')
-                            .insert([profileData])
-                            .select()
-                            .single()
+Anda akan dialihkan ke halaman utama dalam beberapa detik...`,
+                        type: 'success',
+                        autoClose: true,
+                        autoCloseDelay: 5000
+                    })
+                    setShowModal(true)
 
-                        if (profileError) {
-                            console.error('Profile creation error:', profileError)
-                            console.log('Profile might be created by trigger, continuing...')
-                        } else {
-                            console.log('Profile created successfully:', insertedProfile)
-                        }
-
-                        // Show success and redirect
-                        setMessage('Akun berhasil dibuat! Anda akan dialihkan...')
-                        setTimeout(() => {
-                            router.push('/kirim-proposal')
-                        }, 2000)
-
-                    } catch (error) {
-                        console.error('Error in immediate profile creation:', error)
-                        // Still show success, profile might be created by trigger
-                        setMessage('Akun berhasil dibuat! Anda akan dialihkan...')
-                        setTimeout(() => {
-                            router.push('/kirim-proposal')
-                        }, 2000)
-                    }
+                    setTimeout(() => {
+                        router.push('/kirim-proposal')
+                    }, 5000)
                 } else {
                     console.log('=== EMAIL CONFIRMATION REQUIRED ===')
-                    setMessage(`✅ Email konfirmasi telah dikirim ke ${formData.email}. 
+
+                    setModalConfig({
+                        title: '📧 Konfirmasi Email Diperlukan',
+                        message: `Akun Anda telah dibuat, namun perlu dikonfirmasi terlebih dahulu.
+
+✅ Email konfirmasi telah dikirim ke:
+${formData.email}
 
 📧 Silakan cek:
 • Inbox email Anda
 • Folder Spam/Junk
 • Folder Promosi (jika menggunakan Gmail)
 
-Klik link konfirmasi untuk mengaktifkan akun.
+🔗 Klik link konfirmasi untuk mengaktifkan akun
 
-⚠️ Jika email tidak diterima dalam 5 menit, hubungi administrator.`)
+⚠️ Jika email tidak diterima dalam 5 menit, hubungi administrator.
+
+Setelah dikonfirmasi, Anda dapat login dengan email dan password yang telah dibuat.`,
+                        type: 'info',
+                        autoClose: false,
+                        autoCloseDelay: 0
+                    })
+                    setShowModal(true)
+
+                    // Reset form
                     setFormData({
                         fullName: '',
                         email: '',
@@ -264,23 +284,48 @@ Klik link konfirmasi untuk mengaktifkan akun.
         } catch (error: any) {
             console.error('Registration error:', error)
 
+            let errorMessage = 'Terjadi kesalahan saat pendaftaran. Silakan coba lagi.'
+
             if (error.message?.includes('already registered') || error.message?.includes('User already registered')) {
-                setError('Email sudah terdaftar. Silakan gunakan email lain atau login.')
+                errorMessage = 'Email sudah terdaftar. Silakan gunakan email lain atau login.'
             } else if (error.message?.includes('Invalid email')) {
-                setError('Format email tidak valid.')
+                errorMessage = 'Format email tidak valid.'
             } else if (error.message?.includes('Password should be at least 6 characters')) {
-                setError('Password minimal 6 karakter.')
-            } else {
-                setError(error.message || 'Terjadi kesalahan saat pendaftaran. Silakan coba lagi.')
+                errorMessage = 'Password minimal 6 karakter.'
+            } else if (error.message) {
+                errorMessage = error.message
             }
+
+            setModalConfig({
+                title: '❌ Pendaftaran Gagal',
+                message: `Maaf, terjadi kesalahan saat mendaftar:
+
+${errorMessage}
+
+Silakan coba lagi atau hubungi administrator jika masalah berlanjut.`,
+                type: 'error',
+                autoClose: false,
+                autoCloseDelay: 0
+            })
+            setShowModal(true)
         } finally {
             setLoading(false)
         }
     }
 
     const handleComingSoonClick = (provider: string) => {
-        setMessage(`Daftar dengan ${provider} akan segera tersedia!`)
-        setTimeout(() => setMessage(''), 3000)
+        setModalConfig({
+            title: '🚧 Fitur Segera Hadir',
+            message: `Daftar dengan ${provider} akan segera tersedia!
+
+Saat ini Anda masih bisa mendaftar menggunakan email dan password.
+
+Terima kasih atas kesabarannya! 🙏`,
+            type: 'info',
+            autoClose: true,
+            autoCloseDelay: 3000
+        })
+        setShowModal(true)
     }
 
     const getPasswordStrengthColor = () => {
@@ -325,30 +370,7 @@ Klik link konfirmasi untuk mengaktifkan akun.
                     </h2>
                     <p className="text-gray-600">
                         Bergabung dengan Sistem Manajemen Proposal Sponsorship
-                    </p>
-                </div>
-
-                {error && (
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                        <div className="flex">
-                            <svg className="w-5 h-5 text-red-400 mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                            </svg>
-                            <p className="text-red-700 text-sm">{error}</p>
-                        </div>
-                    </div>
-                )}
-
-                {message && (
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                        <div className="flex">
-                            <svg className="w-5 h-5 text-green-400 mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                            </svg>
-                            <p className="text-green-700 text-sm">{message}</p>
-                        </div>
-                    </div>
-                )}
+                    </p>                </div>
 
                 {/* Social Login Buttons */}
                 <div className="space-y-3">
@@ -468,14 +490,14 @@ Klik link konfirmasi untuk mengaktifkan akun.
                                 required
                                 className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 appearance-none"
                             >
-                                <option value="">Pilih Jabatan</option>
+                                <option value="">Pilih jabatan...</option>
                                 {jabatanOptions.map((option) => (
                                     <option key={option.value} value={option.value}>
                                         {option.label}
                                     </option>
                                 ))}
                             </select>
-                            <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                            <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                                 <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                 </svg>
@@ -498,8 +520,8 @@ Klik link konfirmasi untuk mengaktifkan akun.
                                 value={formData.password}
                                 onChange={handleInputChange}
                                 required
-                                className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10 bg-white text-gray-900 placeholder-gray-500"
-                                placeholder="Minimal 8 karakter dengan kombinasi yang kuat"
+                                className="w-full px-3 py-3 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-500"
+                                placeholder="Minimal 6 karakter"
                             />
                             <button
                                 type="button"
@@ -507,9 +529,14 @@ Klik link konfirmasi untuk mengaktifkan akun.
                                 className="absolute inset-y-0 right-0 pr-3 flex items-center"
                             >
                                 {showPassword ? (
-                                    <span className="text-gray-400">👁️‍🗨️</span>
+                                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+                                    </svg>
                                 ) : (
-                                    <span className="text-gray-400">👁️</span>
+                                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    </svg>
                                 )}
                             </button>
                         </div>
@@ -517,52 +544,16 @@ Klik link konfirmasi untuk mengaktifkan akun.
                         {formData.password && (
                             <div className="mt-2">
                                 <div className="flex justify-between items-center mb-1">
-                                    <span className="text-xs text-gray-500">Kekuatan Password:</span>
-                                    <span className={`text-xs font-medium ${passwordStrength === 'weak' ? 'text-red-500' :
-                                        passwordStrength === 'medium' ? 'text-yellow-500' :
-                                            passwordStrength === 'strong' ? 'text-green-500' : 'text-gray-400'
+                                    <span className="text-xs text-gray-500">Kekuatan Password</span>
+                                    <span className={`text-xs capitalize ${passwordStrength === 'strong' ? 'text-green-600' :
+                                        passwordStrength === 'medium' ? 'text-yellow-600' : 'text-red-600'
                                         }`}>
-                                        {passwordStrength === 'weak' ? 'Lemah ❌' :
-                                            passwordStrength === 'medium' ? 'Sedang ⚠️' :
-                                                passwordStrength === 'strong' ? 'Kuat ✅' : ''}
+                                        {passwordStrength === 'strong' ? 'Kuat' :
+                                            passwordStrength === 'medium' ? 'Sedang' : 'Lemah'}
                                     </span>
                                 </div>
                                 <div className="w-full bg-gray-200 rounded-full h-2">
                                     <div className={`h-2 rounded-full transition-all duration-300 ${getPasswordStrengthColor()} ${getPasswordStrengthWidth()}`}></div>
-                                </div>
-
-                                <div className="mt-2 space-y-1">
-                                    <p className="text-xs text-gray-600 font-medium">Persyaratan Password:</p>
-                                    <div className="space-y-1">
-                                        <div className={`flex items-center text-xs ${formData.password.length >= 8 ? 'text-green-600' : 'text-red-500'}`}>
-                                            <span className="mr-1">{formData.password.length >= 8 ? '✅' : '❌'}</span>
-                                            Minimal 8 karakter
-                                        </div>
-                                        <div className={`flex items-center text-xs ${/[A-Z]/.test(formData.password) ? 'text-green-600' : 'text-red-500'}`}>
-                                            <span className="mr-1">{/[A-Z]/.test(formData.password) ? '✅' : '❌'}</span>
-                                            Mengandung huruf besar (A-Z)
-                                        </div>
-                                        <div className={`flex items-center text-xs ${/[a-z]/.test(formData.password) ? 'text-green-600' : 'text-red-500'}`}>
-                                            <span className="mr-1">{/[a-z]/.test(formData.password) ? '✅' : '❌'}</span>
-                                            Mengandung huruf kecil (a-z)
-                                        </div>
-                                        <div className={`flex items-center text-xs ${/\d/.test(formData.password) ? 'text-green-600' : 'text-red-500'}`}>
-                                            <span className="mr-1">{/\d/.test(formData.password) ? '✅' : '❌'}</span>
-                                            Mengandung angka (0-9)
-                                        </div>
-                                        <div className={`flex items-center text-xs ${/[!@#$%^&*(),.?":{}|<>]/.test(formData.password) ? 'text-green-600' : 'text-red-500'}`}>
-                                            <span className="mr-1">{/[!@#$%^&*(),.?":{}|<>]/.test(formData.password) ? '✅' : '❌'}</span>
-                                            Mengandung simbol (!@#$%^&*)
-                                        </div>
-                                    </div>
-
-                                    {passwordStrength === 'weak' && (
-                                        <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
-                                            <p className="text-xs text-red-700">
-                                                <strong>⚠️ Password terlalu lemah!</strong> Penuhi semua persyaratan di atas untuk melanjutkan registrasi.
-                                            </p>
-                                        </div>
-                                    )}
                                 </div>
                             </div>
                         )}
@@ -580,7 +571,7 @@ Klik link konfirmasi untuk mengaktifkan akun.
                                 value={formData.confirmPassword}
                                 onChange={handleInputChange}
                                 required
-                                className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10 bg-white text-gray-900 placeholder-gray-500"
+                                className="w-full px-3 py-3 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-500"
                                 placeholder="Ulangi password"
                             />
                             <button
@@ -589,55 +580,32 @@ Klik link konfirmasi untuk mengaktifkan akun.
                                 className="absolute inset-y-0 right-0 pr-3 flex items-center"
                             >
                                 {showConfirmPassword ? (
-                                    <span className="text-gray-400">👁️‍🗨️</span>
+                                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+                                    </svg>
                                 ) : (
-                                    <span className="text-gray-400">👁️</span>
+                                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    </svg>
                                 )}
                             </button>
                         </div>
-                        {formData.confirmPassword && formData.password !== formData.confirmPassword && (
-                            <p className="mt-1 text-sm text-red-600">Password tidak cocok</p>
-                        )}
-                    </div>
-
-                    <div className="flex items-center">
-                        <input
-                            id="terms"
-                            name="terms"
-                            type="checkbox"
-                            required
-                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                        />
-                        <label htmlFor="terms" className="ml-2 block text-sm text-gray-700">
-                            Saya setuju dengan{' '}
-                            <Link href="/terms" className="text-blue-600 hover:text-blue-500">
-                                Syarat & Ketentuan
-                            </Link>
-                            {' '}dan{' '}
-                            <Link href="/privacy" className="text-blue-600 hover:text-blue-500">
-                                Kebijakan Privasi
-                            </Link>
-                        </label>
                     </div>
 
                     <button
                         type="submit"
-                        disabled={loading || passwordStrength === 'weak' || passwordStrength === ''}
-                        className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors ${loading || passwordStrength === 'weak' || passwordStrength === ''
-                            ? 'bg-gray-400 cursor-not-allowed opacity-50'
-                            : 'bg-blue-600 hover:bg-blue-700'
-                            }`}
+                        disabled={loading}
+                        className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                         {loading ? (
                             <div className="flex items-center">
                                 <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25"></circle>
-                                    <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" className="opacity-75"></path>
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                 </svg>
-                                Memproses...
+                                Mendaftar...
                             </div>
-                        ) : passwordStrength === 'weak' || passwordStrength === '' ? (
-                            'Password Terlalu Lemah'
                         ) : (
                             'Daftar Sekarang'
                         )}
@@ -649,25 +617,39 @@ Klik link konfirmasi untuk mengaktifkan akun.
                         Sudah punya akun?{' '}
                         <Link
                             href="/auth/login"
-                            className="font-medium text-blue-600 hover:text-blue-500"
+                            className="inline-flex items-center text-sm text-blue-600 hover:text-blue-500 font-medium"
                         >
-                            Masuk di sini
+                            Login di sini
+                            <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
                         </Link>
                     </p>
                 </div>
 
-                <div className="text-center">
-                    <Link
-                        href="/"
-                        className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700"
-                    >
-                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                        </svg>
-                        Kembali ke Beranda
-                    </Link>
+                <div className="text-center pt-4 border-t border-gray-200">
+                    <p className="text-xs text-gray-500">
+                        Dengan mendaftar, Anda menyetujui{' '}
+                        <a href="#" className="text-blue-600 hover:text-blue-500">
+                            Syarat & Ketentuan
+                        </a>{' '}
+                        dan{' '}
+                        <a href="#" className="text-blue-600 hover:text-blue-500">
+                            Kebijakan Privasi
+                        </a>                    </p>
                 </div>
             </div>
+
+            {/* Notification Modal */}
+            <NotificationModal
+                isOpen={showModal}
+                onClose={() => setShowModal(false)}
+                title={modalConfig.title}
+                message={modalConfig.message}
+                type={modalConfig.type}
+                autoClose={modalConfig.autoClose}
+                autoCloseDelay={modalConfig.autoCloseDelay}
+            />
         </div>
     )
 }

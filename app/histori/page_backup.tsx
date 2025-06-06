@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/utils/supabase/client'
 
-const supabase = createClient()
+const supabase = createClient() // Tambahkan ini di luar komponen
 
 interface Company {
     id: string
@@ -22,7 +22,7 @@ interface Company {
         }
     }
     createdBy?: string
-    createdByName?: string
+    createdByName?: string // Tambahan
 }
 
 export default function HistoriPage() {
@@ -37,31 +37,30 @@ export default function HistoriPage() {
     const [allUsers, setAllUsers] = useState<any[]>([])
     const [selectedUserId, setSelectedUserId] = useState<string>('')
 
-    // Load companies from Supabase
     useEffect(() => {
         const loadCompaniesFromSupabase = async () => {
             try {
                 const { data, error } = await supabase
                     .from('companies')
                     .select(`
-                        id,
-                        nama_perusahaan,
-                        email_perusahaan,
-                        nomor_whatsapp,
-                        date_added,
-                        created_by,
-                        created_by_name,
-                        whatsapp_sent,
-                        whatsapp_date_sent,
-                        whatsapp_sent_by,
-                        whatsapp_sent_by_name,
-                        whatsapp_sent_by_phone,
-                        email_sent,
-                        email_date_sent,
-                        email_sent_by,
-                        email_sent_by_name,
-                        email_sent_by_phone
-                    `)
+    id,
+    nama_perusahaan,
+    email_perusahaan,
+    nomor_whatsapp,
+    date_added,
+    created_by,
+    created_by_name,
+    whatsapp_sent,
+    whatsapp_date_sent,
+    whatsapp_sent_by,
+    whatsapp_sent_by_name,
+    whatsapp_sent_by_phone,
+    email_sent,
+    email_date_sent,
+    email_sent_by,
+    email_sent_by_name,
+    email_sent_by_phone
+  `)
                     .order('date_added', { ascending: false })
 
                 if (error) throw error
@@ -73,7 +72,7 @@ export default function HistoriPage() {
                     nomorWhatsapp: item.nomor_whatsapp,
                     dateAdded: item.date_added,
                     createdBy: item.created_by,
-                    createdByName: item.created_by_name ?? '-',
+                    createdByName: item.created_by_name ?? '-', // <-- perbaiki di sini
                     status: {
                         whatsapp: {
                             sent: item.whatsapp_sent,
@@ -99,7 +98,7 @@ export default function HistoriPage() {
         loadCompaniesFromSupabase()
     }, [])
 
-    // Get user ID from Supabase
+    // Ambil userId dari Supabase saat mount
     useEffect(() => {
         const getUser = async () => {
             const { data } = await supabase.auth.getUser()
@@ -108,7 +107,7 @@ export default function HistoriPage() {
         getUser()
     }, [])
 
-    // Load user profile and all users for koordinator
+    // Load user profile dan semua users untuk koordinator
     useEffect(() => {
         const loadUserData = async () => {
             if (!userId) return
@@ -145,12 +144,9 @@ export default function HistoriPage() {
             } catch (error) {
                 console.error('Error loading user data:', error)
             }
-        }
-
-        loadUserData()
+        }        loadUserData()
     }, [userId])
 
-    // Filter companies based on user selection, status, and search term
     useEffect(() => {
         let filtered = companies
 
@@ -297,9 +293,7 @@ export default function HistoriPage() {
                                 Pending
                             </button>
                         </div>
-                    </div>
-
-                    {/* Filter User - Enhanced for Koordinator */}
+                    </div>                    {/* Filter User - Enhanced for Koordinator */}
                     <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center mt-4">
                         <label className="text-sm font-medium text-gray-700">Lihat data dari:</label>
                         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
@@ -312,7 +306,7 @@ export default function HistoriPage() {
                                         setSelectedUserId('')
                                     }
                                 }}
-                                className="px-4 py-2 border-2 border-gray-300 rounded-lg text-sm font-medium text-gray-800 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors shadow-sm"
+                                className="px-4 py-2 border-2 border-gray-300 rounded-lg text-sm font-medium text-gray-800 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                             >
                                 <option value="all" className="text-gray-800 font-medium">Semua user</option>
                                 <option value="me" className="text-gray-800 font-medium">Saya saja</option>
@@ -326,7 +320,7 @@ export default function HistoriPage() {
                                 <select
                                     value={selectedUserId}
                                     onChange={e => setSelectedUserId(e.target.value)}
-                                    className="px-4 py-2 border-2 border-blue-300 rounded-lg text-sm font-medium text-gray-800 bg-blue-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors shadow-sm"
+                                    className="px-4 py-2 border-2 border-blue-300 rounded-lg text-sm font-medium text-gray-800 bg-blue-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                                 >
                                     <option value="" className="text-gray-600">Pilih user...</option>
                                     {allUsers.map(user => (

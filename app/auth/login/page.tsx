@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
 import { getAuthRedirectUrl } from '@/utils/url'
+import NotificationModal from '../../components/ui/NotificationModal'
 
 function LoginContent() {
     const [email, setEmail] = useState('')
@@ -13,6 +14,16 @@ function LoginContent() {
     const [error, setError] = useState('')
     const [message, setMessage] = useState('')
     const [showPassword, setShowPassword] = useState(false)
+
+    // Modal states
+    const [showModal, setShowModal] = useState(false)
+    const [modalConfig, setModalConfig] = useState({
+        title: '',
+        message: '',
+        type: 'info' as 'success' | 'info' | 'warning' | 'error',
+        autoClose: false,
+        autoCloseDelay: 5000
+    })
 
     const router = useRouter()
     const searchParams = useSearchParams()
@@ -28,29 +39,52 @@ function LoginContent() {
             }
         }
         checkSession()
-    }, [supabase.auth, router, searchParams])    // Handle URL error messages
+    }, [supabase.auth, router, searchParams])
+
+    // Handle URL error messages
     useEffect(() => {
         const urlError = searchParams.get('error')
         const urlMessage = searchParams.get('message')
 
         if (urlError) {
+            let errorMessage = ''
             switch (urlError) {
                 case 'callback_error':
-                    setError('Terjadi kesalahan saat proses login. Silakan coba lagi.')
+                    errorMessage = 'Terjadi kesalahan saat proses login. Silakan coba lagi.'
                     break
                 case 'unexpected_error':
-                    setError('Terjadi kesalahan tak terduga. Silakan coba lagi.')
+                    errorMessage = 'Terjadi kesalahan tak terduga. Silakan coba lagi.'
                     break
                 case 'missing_code':
-                    setError('Kode autentikasi tidak ditemukan. Silakan coba lagi.')
+                    errorMessage = 'Kode autentikasi tidak ditemukan. Silakan coba lagi.'
                     break
                 default:
-                    setError(urlError)
+                    errorMessage = urlError
             }
+
+            setModalConfig({
+                title: '❌ Error Login',
+                message: `Terjadi kesalahan saat login:
+
+${errorMessage}
+
+Silakan coba lagi atau hubungi administrator jika masalah berlanjut.`,
+                type: 'error',
+                autoClose: false,
+                autoCloseDelay: 0
+            })
+            setShowModal(true)
         }
 
         if (urlMessage) {
-            setMessage(urlMessage)
+            setModalConfig({
+                title: '📧 Informasi',
+                message: urlMessage,
+                type: 'info',
+                autoClose: false,
+                autoCloseDelay: 0
+            })
+            setShowModal(true)
         }
     }, [searchParams])
 
@@ -74,15 +108,25 @@ function LoginContent() {
             const { data, error } = await supabase.auth.signInWithPassword({
                 email,
                 password,
-            });
-
-            if (error) {
+            }); if (error) {
                 console.error('Login error details:', error);
                 if (error.message.includes('Invalid API key')) {
                     console.error('API Key Error - Check .env.local configuration');
                     console.error('URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
                     console.error('Key length:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.length : 0);
-                    setError('Error konfigurasi API Supabase. Hubungi administrator.');
+
+                    setModalConfig({
+                        title: '⚙️ Error Konfigurasi',
+                        message: `Terjadi kesalahan konfigurasi sistem:
+
+Error konfigurasi API Supabase. Hubungi administrator.
+
+Pastikan file .env.local sudah dikonfigurasi dengan benar.`,
+                        type: 'error',
+                        autoClose: false,
+                        autoCloseDelay: 0
+                    })
+                    setShowModal(true)
                 } else {
                     throw error;
                 }
@@ -95,20 +139,91 @@ function LoginContent() {
             }
         } catch (error: any) {
             console.error('Login error:', error)
-            setError(error.message || 'Terjadi kesalahan saat login')
+
+            let errorMessage = 'Terjadi kesalahan saat login'
+            let errorTitle = '❌ Login Gagal'
+
+            if (error.message?.includes('Invalid login credentials')) {
+                errorTitle = '🔐 Email atau Password Salah'
+                errorMessage = `Email atau password yang Anda masukkan salah.
+
+📧 Email: ${email}
+
+Pastikan:
+• Email sudah benar
+• Password sudah benar
+• Caps Lock tidak aktif
+• Akun sudah terdaftar dan terverifikasi
+
+Jika lupa password, gunakan fitur "Lupa Password".`
+            } else if (error.message?.includes('Email not confirmed')) {
+                errorTitle = '📧 Email Belum Dikonfirmasi'
+                errorMessage = `Akun Anda belum dikonfirmasi.
+
+📧 Email: ${email}
+
+Silakan cek email Anda dan klik link konfirmasi yang telah dikirim.
+
+Jika tidak menemukan email konfirmasi:
+• Cek folder Spam/Junk
+• Cek folder Promosi (Gmail)
+• Tunggu beberapa menit dan coba lagi
+
+Hubungi administrator jika masalah berlanjut.`
+            } else if (error.message?.includes('Too many requests')) {
+                errorTitle = '⏱️ Terlalu Banyak Percobaan'
+                errorMessage = `Anda telah melakukan terlalu banyak percobaan login.
+
+Silakan tunggu beberapa menit sebelum mencoba lagi.
+
+Tips:
+• Pastikan email dan password sudah benar
+• Gunakan fitur "Lupa Password" jika perlu
+• Hubungi administrator jika masalah berlanjut`
+            } else if (error.message?.includes('Invalid email')) {
+                errorTitle = '📧 Format Email Tidak Valid'
+                errorMessage = `Format email yang Anda masukkan tidak valid.
+
+📧 Email: ${email}
+
+Pastikan email menggunakan format yang benar:
+• contoh@email.com
+• nama.lengkap@domain.co.id
+• user123@gmail.com`
+            } else {
+                errorMessage = error.message || errorMessage
+            }
+
+            setModalConfig({
+                title: errorTitle,
+                message: errorMessage,
+                type: 'error',
+                autoClose: false,
+                autoCloseDelay: 0
+            })
+            setShowModal(true)
         } finally {
             setLoading(false)
         }
-    }
-
-    const handleForgotPassword = async () => {
+    }; const handleForgotPassword = async () => {
         if (!email) {
-            setError('Masukkan email terlebih dahulu untuk reset password')
+            setModalConfig({
+                title: '📧 Email Diperlukan',
+                message: `Silakan masukkan email terlebih dahulu untuk reset password.
+
+Langkah-langkah:
+1. Masukkan email Anda di kolom email
+2. Klik tombol "Lupa password?"
+3. Cek email untuk link reset password`,
+                type: 'warning',
+                autoClose: false,
+                autoCloseDelay: 0
+            })
+            setShowModal(true)
             return
         }
 
         setLoading(true)
-        setError('')
 
         try {
             const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -119,9 +234,61 @@ function LoginContent() {
                 throw error
             }
 
-            setMessage('Link reset password telah dikirim ke email Anda')
+            setModalConfig({
+                title: '📧 Email Reset Password Terkirim',
+                message: `Link reset password telah berhasil dikirim!
+
+📧 Email tujuan: ${email}
+
+Langkah selanjutnya:
+1. Cek inbox email Anda
+2. Cek folder Spam/Junk jika tidak ada di inbox
+3. Klik link reset password dalam email
+4. Buat password baru
+5. Login dengan password baru
+
+⚠️ Link reset password akan expired dalam 1 jam.
+
+Jika email tidak diterima dalam 5 menit, coba kirim ulang atau hubungi administrator.`,
+                type: 'success',
+                autoClose: false,
+                autoCloseDelay: 0
+            })
+            setShowModal(true)
         } catch (error: any) {
-            setError(error.message || 'Terjadi kesalahan saat mengirim email reset')
+            let errorMessage = 'Terjadi kesalahan saat mengirim email reset'
+
+            if (error.message?.includes('User not found')) {
+                errorMessage = `Email tidak ditemukan dalam sistem.
+
+📧 Email: ${email}
+
+Kemungkinan:
+• Email belum terdaftar
+• Email salah ketik
+• Gunakan email lain yang sudah terdaftar
+
+Silakan daftar akun baru jika belum memiliki akun.`
+            } else if (error.message?.includes('Email rate limit exceeded')) {
+                errorMessage = `Terlalu banyak permintaan reset password.
+
+📧 Email: ${email}
+
+Silakan tunggu beberapa menit sebelum mencoba lagi.
+
+Jika sudah menerima email reset sebelumnya, gunakan link tersebut.`
+            } else {
+                errorMessage = error.message || errorMessage
+            }
+
+            setModalConfig({
+                title: '❌ Gagal Mengirim Email Reset',
+                message: errorMessage,
+                type: 'error',
+                autoClose: false,
+                autoCloseDelay: 0
+            })
+            setShowModal(true)
         } finally {
             setLoading(false)
         }
@@ -281,15 +448,22 @@ function LoginContent() {
                             <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
                                 Ingat saya
                             </label>
+                        </div>                        <div className="flex items-center space-x-4">
+                            <button
+                                type="button"
+                                onClick={handleForgotPassword}
+                                className="text-sm text-blue-600 hover:text-blue-500"
+                            >
+                                Kirim Reset Email
+                            </button>
+                            <span className="text-gray-300">|</span>
+                            <Link
+                                href="/auth/reset-password"
+                                className="text-sm text-blue-600 hover:text-blue-500"
+                            >
+                                Reset Password
+                            </Link>
                         </div>
-
-                        <button
-                            type="button"
-                            onClick={handleForgotPassword}
-                            className="text-sm text-blue-600 hover:text-blue-500"
-                        >
-                            Lupa password?
-                        </button>
                     </div>
 
                     <button
@@ -334,9 +508,20 @@ function LoginContent() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                         </svg>
                         Kembali ke Beranda
-                    </Link>
-                </div>
-            </div>        </div>
+                    </Link>                </div>
+            </div>
+
+            {/* Notification Modal */}
+            <NotificationModal
+                isOpen={showModal}
+                onClose={() => setShowModal(false)}
+                title={modalConfig.title}
+                message={modalConfig.message}
+                type={modalConfig.type}
+                autoClose={modalConfig.autoClose}
+                autoCloseDelay={modalConfig.autoCloseDelay}
+            />
+        </div>
     )
 }
 

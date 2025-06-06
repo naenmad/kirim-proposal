@@ -53,7 +53,8 @@ export default function HomePage() {
               emailSent,
               totalSent
             })
-          }        } else {
+          }
+        } else {
           // Pengguna belum login, gunakan function khusus untuk statistik publik
           const { data, error } = await supabase
             .rpc('get_public_stats')
@@ -89,7 +90,7 @@ export default function HomePage() {
               email_sent: number;
               total_sent: number;
             };
-            
+
             setStats({
               totalCompanies: typedData.total_companies || 0,
               whatsappSent: typedData.whatsapp_sent || 0,
